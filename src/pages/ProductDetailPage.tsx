@@ -21,13 +21,11 @@ const ProductDetailPage = () => {
   const product = products.find(p => p.id === id);
   
   const [selectedSize, setSelectedSize] = useState('');
-  const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [showError, setShowError] = useState(false);
   
   useEffect(() => {
     if (product) {
-      setSelectedColor(product.colors[0]);
       setSelectedSize('');
       setQuantity(1);
       setShowError(false);
@@ -73,7 +71,7 @@ const ProductDetailPage = () => {
       price: product.price,
       image: product.image,
       size: selectedSize,
-      color: selectedColor,
+      color: product.colors[0],
       quantity: quantity
     });
     
@@ -169,30 +167,6 @@ const ProductDetailPage = () => {
             <p className="text-gray-700 mb-6">{product.description}</p>
             
             <Separator className="my-6" />
-            
-            {/* Color Selection */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-3">Color: <span className="font-normal capitalize">{selectedColor}</span></h3>
-              <div className="flex flex-wrap gap-2">
-                {product.colors.map(color => (
-                  <div
-                    key={color}
-                    className={`
-                      w-10 h-10 rounded-full cursor-pointer border 
-                      ${selectedColor === color ? 'ring-2 ring-primary ring-offset-2' : ''}
-                    `}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setSelectedColor(color)}
-                  >
-                    {selectedColor === color && (
-                      <div className="h-full w-full flex items-center justify-center">
-                        <Check className="h-5 w-5 text-white drop-shadow-md" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
             
             {/* Size Selection */}
             {product.category !== 'equipment' && (
