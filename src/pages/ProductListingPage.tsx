@@ -1,16 +1,22 @@
-
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Layout } from '@/components/Layout';
-import { products, filterOptions, Product } from '@/data/products';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Slider } from '@/components/ui/slider';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import React, { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import { Layout } from "@/components/Layout";
+import { products, filterOptions, Product } from "@/data/products";
+import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useFilters } from "@/context/FilterContext";
 
 const sortOptions = [
   { label: "Price: Low to High", value: "price-asc" },
@@ -22,87 +28,91 @@ const sortOptions = [
 const ProductListingPage = () => {
   const { category } = useParams<{ category: string }>();
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilters, setSelectedFilters] = useState<{
-    colors: string[];
-    sizes: string[];
-    materials: string[];
-    genders: string[];
-    brands: string[];
-    subCategories: string[];
-    price: [number, number];
-  }>({
-    colors: [],
-    sizes: [],
-    materials: [],
-    genders: [],
-    brands: [],
-    subCategories: [],
-    price: [0, 200],
-  });
   const [sortBy, setSortBy] = useState("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Replace the local state with context
+  const { filters, toggleFilter, clearFilters, setPriceRange, setSearchQuery } =
+    useFilters();
+
+  // Use the filters directly from context instead of local state
+  const selectedFilters = filters;
+  const searchQuery = filters.searchQuery;
+
+  // Add the missing getCategoryTitle function
+  const getCategoryTitle = () => {
+    if (category === "all") return "All Products";
+    const categoryInfo = filterOptions.categories.find(
+      (c) => c.id === category
+    );
+    return categoryInfo ? categoryInfo.name : "Products";
+  };
+
   useEffect(() => {
     let filtered = [...products];
-    
+
     // Filter by category if not "all"
     if (category && category !== "all") {
-      filtered = filtered.filter(p => p.category === category);
+      filtered = filtered.filter((p) => p.category === category);
     }
-    
+
     // Apply search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(query) || 
-        p.description.toLowerCase().includes(query) ||
-        p.brand.toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.description.toLowerCase().includes(query) ||
+          p.brand.toLowerCase().includes(query)
       );
     }
-    
+
     // Apply selected filters
     if (selectedFilters.colors.length > 0) {
-      filtered = filtered.filter(p => 
-        p.colors.some(color => selectedFilters.colors.includes(color))
+      filtered = filtered.filter((p) =>
+        p.colors.some((color) => selectedFilters.colors.includes(color))
       );
     }
-    
+
     if (selectedFilters.sizes.length > 0) {
-      filtered = filtered.filter(p => 
-        p.sizes.some(size => selectedFilters.sizes.includes(size))
+      filtered = filtered.filter((p) =>
+        p.sizes.some((size) => selectedFilters.sizes.includes(size))
       );
     }
-    
+
     if (selectedFilters.materials.length > 0) {
-      filtered = filtered.filter(p => 
-        p.materials.some(material => selectedFilters.materials.includes(material))
+      filtered = filtered.filter((p) =>
+        p.materials.some((material) =>
+          selectedFilters.materials.includes(material)
+        )
       );
     }
-    
+
     if (selectedFilters.genders.length > 0) {
-      filtered = filtered.filter(p => 
+      filtered = filtered.filter((p) =>
         selectedFilters.genders.includes(p.gender)
       );
     }
-    
+
     if (selectedFilters.brands.length > 0) {
-      filtered = filtered.filter(p => 
+      filtered = filtered.filter((p) =>
         selectedFilters.brands.includes(p.brand)
       );
     }
-    
+
     if (selectedFilters.subCategories.length > 0) {
-      filtered = filtered.filter(p => 
+      filtered = filtered.filter((p) =>
         selectedFilters.subCategories.includes(p.subCategory)
       );
     }
-    
+
     // Apply price filter
-    filtered = filtered.filter(p => 
-      p.price >= selectedFilters.price[0] && p.price <= selectedFilters.price[1]
+    filtered = filtered.filter(
+      (p) =>
+        p.price >= selectedFilters.price[0] &&
+        p.price <= selectedFilters.price[1]
     );
-    
+
     // Apply sorting
     switch (sortBy) {
       case "price-asc":
@@ -120,50 +130,17 @@ const ProductListingPage = () => {
       default:
         break;
     }
-    
+
     setFilteredProducts(filtered);
   }, [category, searchQuery, selectedFilters, sortBy]);
 
-  const toggleFilter = (type: keyof typeof selectedFilters, value: string) => {
-    setSelectedFilters(prev => {
-      const current = prev[type] as string[];
-      return {
-        ...prev,
-        [type]: current.includes(value)
-          ? current.filter(v => v !== value)
-          : [...current, value]
-      };
-    });
-  };
-
-  const clearFilters = () => {
-    setSelectedFilters({
-      colors: [],
-      sizes: [],
-      materials: [],
-      genders: [],
-      brands: [],
-      subCategories: [],
-      price: [0, 200],
-    });
-    setSearchQuery('');
-  };
-
-  const getCategoryTitle = () => {
-    if (category === "all") return "All Products";
-    const categoryInfo = filterOptions.categories.find(c => c.id === category);
-    return categoryInfo ? categoryInfo.name : "Products";
-  };
-
+  // Update price range handler to use context
   const handlePriceChange = (value: number[]) => {
-    setSelectedFilters(prev => ({
-      ...prev,
-      price: [value[0], value[1]]
-    }));
+    setPriceRange([value[0], value[1]]);
   };
 
   // Calculate the active filter count
-  const activeFilterCount = 
+  const activeFilterCount =
     selectedFilters.colors.length +
     selectedFilters.sizes.length +
     selectedFilters.materials.length +
@@ -181,7 +158,7 @@ const ProductListingPage = () => {
             {filteredProducts.length} products available
           </p>
         </div>
-        
+
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Filters - Desktop */}
           <div className="hidden lg:block w-64 flex-shrink-0">
@@ -189,8 +166,8 @@ const ProductListingPage = () => {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-semibold">Filters</h3>
                 {activeFilterCount > 0 && (
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="text-xs h-8 px-2"
                     onClick={clearFilters}
                   >
@@ -198,7 +175,7 @@ const ProductListingPage = () => {
                   </Button>
                 )}
               </div>
-              
+
               <div className="space-y-6">
                 {/* Price Range */}
                 <div>
@@ -216,17 +193,19 @@ const ProductListingPage = () => {
                     <span>${selectedFilters.price[1]}</span>
                   </div>
                 </div>
-                
+
                 {/* Gender */}
                 <div>
                   <h4 className="font-medium text-sm mb-2">Gender</h4>
                   <div className="space-y-1">
-                    {filterOptions.genders.map(gender => (
+                    {filterOptions.genders.map((gender) => (
                       <div key={gender} className="flex items-center">
                         <Checkbox
                           id={`gender-${gender}`}
                           checked={selectedFilters.genders.includes(gender)}
-                          onCheckedChange={() => toggleFilter('genders', gender)}
+                          onCheckedChange={() =>
+                            toggleFilter("genders", gender)
+                          }
                         />
                         <label
                           htmlFor={`gender-${gender}`}
@@ -238,17 +217,21 @@ const ProductListingPage = () => {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Categories */}
                 <div>
                   <h4 className="font-medium text-sm mb-2">Categories</h4>
                   <div className="space-y-1">
-                    {filterOptions.subCategories.map(subCat => (
+                    {filterOptions.subCategories.map((subCat) => (
                       <div key={subCat} className="flex items-center">
                         <Checkbox
                           id={`subcat-${subCat}`}
-                          checked={selectedFilters.subCategories.includes(subCat)}
-                          onCheckedChange={() => toggleFilter('subCategories', subCat)}
+                          checked={selectedFilters.subCategories.includes(
+                            subCat
+                          )}
+                          onCheckedChange={() =>
+                            toggleFilter("subCategories", subCat)
+                          }
                         />
                         <label
                           htmlFor={`subcat-${subCat}`}
@@ -260,17 +243,17 @@ const ProductListingPage = () => {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Brands */}
                 <div>
                   <h4 className="font-medium text-sm mb-2">Brands</h4>
                   <div className="space-y-1">
-                    {filterOptions.brands.map(brand => (
+                    {filterOptions.brands.map((brand) => (
                       <div key={brand} className="flex items-center">
                         <Checkbox
                           id={`brand-${brand}`}
                           checked={selectedFilters.brands.includes(brand)}
-                          onCheckedChange={() => toggleFilter('brands', brand)}
+                          onCheckedChange={() => toggleFilter("brands", brand)}
                         />
                         <label
                           htmlFor={`brand-${brand}`}
@@ -282,37 +265,41 @@ const ProductListingPage = () => {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Colors */}
                 <div>
                   <h4 className="font-medium text-sm mb-2">Colors</h4>
                   <div className="flex flex-wrap gap-2">
-                    {filterOptions.colors.map(color => (
+                    {filterOptions.colors.map((color) => (
                       <div
                         key={color}
                         className={`w-6 h-6 rounded-full cursor-pointer border ${
                           selectedFilters.colors.includes(color)
-                            ? 'ring-2 ring-primary ring-offset-2'
-                            : ''
+                            ? "ring-2 ring-primary ring-offset-2"
+                            : ""
                         }`}
                         style={{ backgroundColor: color }}
-                        onClick={() => toggleFilter('colors', color)}
+                        onClick={() => toggleFilter("colors", color)}
                         title={color}
                       />
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Sizes */}
                 <div>
                   <h4 className="font-medium text-sm mb-2">Sizes</h4>
                   <div className="flex flex-wrap gap-1">
-                    {filterOptions.sizes.map(size => (
+                    {filterOptions.sizes.map((size) => (
                       <Badge
                         key={size}
-                        variant={selectedFilters.sizes.includes(size) ? "default" : "outline"}
+                        variant={
+                          selectedFilters.sizes.includes(size)
+                            ? "default"
+                            : "outline"
+                        }
                         className="cursor-pointer"
-                        onClick={() => toggleFilter('sizes', size)}
+                        onClick={() => toggleFilter("sizes", size)}
                       >
                         {size}
                       </Badge>
@@ -322,7 +309,7 @@ const ProductListingPage = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Mobile Filter Button & Sheet */}
           <div className="lg:hidden my-4">
             <div className="flex gap-2">
@@ -338,8 +325,8 @@ const ProductListingPage = () => {
                     <div className="flex justify-between items-center">
                       <h3 className="font-semibold">Filters</h3>
                       {activeFilterCount > 0 && (
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           className="text-xs h-8 px-2"
                           onClick={clearFilters}
                         >
@@ -347,7 +334,7 @@ const ProductListingPage = () => {
                         </Button>
                       )}
                     </div>
-                    
+
                     {/* Price Range */}
                     <div>
                       <h4 className="font-medium text-sm mb-3">Price Range</h4>
@@ -364,17 +351,19 @@ const ProductListingPage = () => {
                         <span>${selectedFilters.price[1]}</span>
                       </div>
                     </div>
-                    
+
                     {/* Gender */}
                     <div>
                       <h4 className="font-medium text-sm mb-2">Gender</h4>
                       <div className="space-y-1">
-                        {filterOptions.genders.map(gender => (
+                        {filterOptions.genders.map((gender) => (
                           <div key={gender} className="flex items-center">
                             <Checkbox
                               id={`mobile-gender-${gender}`}
                               checked={selectedFilters.genders.includes(gender)}
-                              onCheckedChange={() => toggleFilter('genders', gender)}
+                              onCheckedChange={() =>
+                                toggleFilter("genders", gender)
+                              }
                             />
                             <label
                               htmlFor={`mobile-gender-${gender}`}
@@ -386,17 +375,21 @@ const ProductListingPage = () => {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Categories */}
                     <div>
                       <h4 className="font-medium text-sm mb-2">Categories</h4>
                       <div className="space-y-1">
-                        {filterOptions.subCategories.map(subCat => (
+                        {filterOptions.subCategories.map((subCat) => (
                           <div key={subCat} className="flex items-center">
                             <Checkbox
                               id={`mobile-subcat-${subCat}`}
-                              checked={selectedFilters.subCategories.includes(subCat)}
-                              onCheckedChange={() => toggleFilter('subCategories', subCat)}
+                              checked={selectedFilters.subCategories.includes(
+                                subCat
+                              )}
+                              onCheckedChange={() =>
+                                toggleFilter("subCategories", subCat)
+                              }
                             />
                             <label
                               htmlFor={`mobile-subcat-${subCat}`}
@@ -408,17 +401,19 @@ const ProductListingPage = () => {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Brands */}
                     <div>
                       <h4 className="font-medium text-sm mb-2">Brands</h4>
                       <div className="space-y-1">
-                        {filterOptions.brands.map(brand => (
+                        {filterOptions.brands.map((brand) => (
                           <div key={brand} className="flex items-center">
                             <Checkbox
                               id={`mobile-brand-${brand}`}
                               checked={selectedFilters.brands.includes(brand)}
-                              onCheckedChange={() => toggleFilter('brands', brand)}
+                              onCheckedChange={() =>
+                                toggleFilter("brands", brand)
+                              }
                             />
                             <label
                               htmlFor={`mobile-brand-${brand}`}
@@ -430,46 +425,50 @@ const ProductListingPage = () => {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Colors */}
                     <div>
                       <h4 className="font-medium text-sm mb-2">Colors</h4>
                       <div className="flex flex-wrap gap-2">
-                        {filterOptions.colors.map(color => (
+                        {filterOptions.colors.map((color) => (
                           <div
                             key={color}
                             className={`w-8 h-8 rounded-full cursor-pointer border ${
                               selectedFilters.colors.includes(color)
-                                ? 'ring-2 ring-primary ring-offset-2'
-                                : ''
+                                ? "ring-2 ring-primary ring-offset-2"
+                                : ""
                             }`}
                             style={{ backgroundColor: color }}
-                            onClick={() => toggleFilter('colors', color)}
+                            onClick={() => toggleFilter("colors", color)}
                             title={color}
                           />
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Sizes */}
                     <div>
                       <h4 className="font-medium text-sm mb-2">Sizes</h4>
                       <div className="flex flex-wrap gap-1">
-                        {filterOptions.sizes.map(size => (
+                        {filterOptions.sizes.map((size) => (
                           <Badge
                             key={size}
-                            variant={selectedFilters.sizes.includes(size) ? "default" : "outline"}
+                            variant={
+                              selectedFilters.sizes.includes(size)
+                                ? "default"
+                                : "outline"
+                            }
                             className="cursor-pointer"
-                            onClick={() => toggleFilter('sizes', size)}
+                            onClick={() => toggleFilter("sizes", size)}
                           >
                             {size}
                           </Badge>
                         ))}
                       </div>
                     </div>
-                    
-                    <Button 
-                      className="w-full mt-4" 
+
+                    <Button
+                      className="w-full mt-4"
                       onClick={() => setFiltersOpen(false)}
                     >
                       Apply Filters
@@ -477,7 +476,7 @@ const ProductListingPage = () => {
                   </div>
                 </SheetContent>
               </Sheet>
-              
+
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                 <Input
@@ -491,14 +490,14 @@ const ProductListingPage = () => {
                     variant="ghost"
                     size="icon"
                     className="absolute right-0 top-0 h-full"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => setSearchQuery("")}
                   >
                     <X className="h-4 w-4" />
                   </Button>
                 )}
               </div>
             </div>
-            
+
             {/* Sort on mobile */}
             <div className="mt-2">
               <Select value={sortBy} onValueChange={setSortBy}>
@@ -506,7 +505,7 @@ const ProductListingPage = () => {
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
-                  {sortOptions.map(option => (
+                  {sortOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -515,7 +514,7 @@ const ProductListingPage = () => {
               </Select>
             </div>
           </div>
-          
+
           <div className="flex-1">
             {/* Search & Sort - Desktop */}
             <div className="hidden lg:flex justify-between items-center mb-6">
@@ -532,19 +531,19 @@ const ProductListingPage = () => {
                     variant="ghost"
                     size="icon"
                     className="absolute right-0 top-0 h-full"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => setSearchQuery("")}
                   >
                     <X className="h-4 w-4" />
                   </Button>
                 )}
               </div>
-              
+
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
-                  {sortOptions.map(option => (
+                  {sortOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -552,82 +551,84 @@ const ProductListingPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Active Filters */}
             {activeFilterCount > 0 && (
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 <span className="text-sm font-medium">Active Filters:</span>
-                {selectedFilters.colors.map(color => (
+                {selectedFilters.colors.map((color) => (
                   <Badge
                     key={`badge-color-${color}`}
                     variant="secondary"
                     className="flex items-center gap-1"
                   >
-                    <span 
-                      className="w-3 h-3 rounded-full" 
+                    <span
+                      className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: color }}
                     />
                     <span className="capitalize">{color}</span>
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => toggleFilter('colors', color)}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => toggleFilter("colors", color)}
                     />
                   </Badge>
                 ))}
-                {selectedFilters.sizes.map(size => (
+                {selectedFilters.sizes.map((size) => (
                   <Badge
                     key={`badge-size-${size}`}
                     variant="secondary"
                     className="flex items-center gap-1"
                   >
                     Size: {size}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => toggleFilter('sizes', size)}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => toggleFilter("sizes", size)}
                     />
                   </Badge>
                 ))}
-                {selectedFilters.brands.map(brand => (
+                {selectedFilters.brands.map((brand) => (
                   <Badge
                     key={`badge-brand-${brand}`}
                     variant="secondary"
                     className="flex items-center gap-1"
                   >
                     {brand}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => toggleFilter('brands', brand)}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => toggleFilter("brands", brand)}
                     />
                   </Badge>
                 ))}
-                {(selectedFilters.price[0] > 0 || selectedFilters.price[1] < 200) && (
+                // Fix the price filter badge removal
+                {(selectedFilters.price[0] > 0 ||
+                  selectedFilters.price[1] < 200) && (
                   <Badge
                     variant="secondary"
                     className="flex items-center gap-1"
                   >
                     ${selectedFilters.price[0]} - ${selectedFilters.price[1]}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => setSelectedFilters(prev => ({...prev, price: [0, 200]}))}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => setPriceRange([0, 200])}
                     />
                   </Badge>
                 )}
               </div>
             )}
-            
+
             {/* Product Grid */}
             {filteredProducts.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProducts.map(product => (
-                  <Link 
-                    key={product.id} 
+                {filteredProducts.map((product) => (
+                  <Link
+                    key={product.id}
                     to={`/product/${product.id}`}
                     className="product-card group"
                   >
                     <div className="relative aspect-square overflow-hidden bg-gray-100">
-                      <img 
-                        src={product.image} 
-                        alt={product.name} 
+                      <img
+                        src={product.image}
+                        alt={product.name}
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                       {product.isNew && (
@@ -647,7 +648,9 @@ const ProductListingPage = () => {
                         <p className="font-bold">${product.price.toFixed(2)}</p>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <p className="text-gray-500 capitalize">{product.brand}</p>
+                        <p className="text-gray-500 capitalize">
+                          {product.brand}
+                        </p>
                         <div className="flex items-center">
                           <span className="mr-1">★</span>
                           <span>{product.rating}</span>
@@ -660,7 +663,9 @@ const ProductListingPage = () => {
             ) : (
               <div className="text-center py-12">
                 <p className="text-xl mb-4">No products found</p>
-                <p className="text-gray-600 mb-6">Try adjusting your filters or search term</p>
+                <p className="text-gray-600 mb-6">
+                  Try adjusting your filters or search term
+                </p>
                 <Button onClick={clearFilters}>Clear All Filters</Button>
               </div>
             )}

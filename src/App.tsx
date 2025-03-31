@@ -14,33 +14,36 @@ import NotFound from "./pages/NotFound";
 import { VoiceAssistant } from "./components/VoiceAssistant";
 import { CartProvider } from "./context/CartContext";
 import { VoiceListener } from "./components/VoiceListener";
+import { FilterProvider } from "./context/FilterContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <CartProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<IntroPage />} />
-            <Route path="/categories" element={<CategorySelectionPage />} />
-            <Route
-              path="/products/:category"
-              element={<ProductListingPage />}
-            />
-            <Route path="/product/:id" element={<ProductDetailPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/payment" element={<PaymentPage />} />
-            <Route path="/confirmation" element={<ConfirmationPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <VoiceListener />
-          <VoiceAssistant />
-        </BrowserRouter>
-      </TooltipProvider>
+      <FilterProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<IntroPage />} />
+              <Route path="/categories" element={<CategorySelectionPage />} />
+              <Route
+                path="/products/:category"
+                element={<ProductListingPage />}
+              />
+              <Route path="/product/:id" element={<ProductDetailPage />} />
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/payment" element={<PaymentPage />} />
+              <Route path="/confirmation" element={<ConfirmationPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <VoiceListener />
+            <VoiceAssistant />
+          </BrowserRouter>
+        </TooltipProvider>
+      </FilterProvider>
     </CartProvider>
   </QueryClientProvider>
 );

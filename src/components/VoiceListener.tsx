@@ -6,6 +6,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
 // Define available functions for Gemini
+// Add these imports
+import { useFilters } from "@/context/FilterContext";
+import { filterOptions } from "@/data/products";
+
+// Add this to the availableFunctions object
 const availableFunctions = {
   showGymClothes: {
     name: "showGymClothes",
@@ -35,9 +40,23 @@ const availableFunctions = {
       "Execute this function if the user is interested in running, jogging, or any running-related activities or equipment",
     parameters: {},
   },
+  applyFilters: {
+    name: "applyFilters",
+    description:
+      "Apply filters to the product listing page, such as colors, sizes, price ranges, brands, etc.",
+    parameters: {},
+  },
+  clearFilters: {
+    name: "clearFilters",
+    description: "Clear all applied filters on the product listing page",
+    parameters: {},
+  },
 };
 
 export const VoiceListener = () => {
+  // Add this near the top of the component
+  const { updateFilters, clearFilters } = useFilters();
+
   const [transcript, setTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const navigate = useNavigate();
@@ -135,10 +154,87 @@ export const VoiceListener = () => {
     }
   };
 
-  // Update the handleVoiceCommand switch statement
+  // Add this new function
+  const interpretFilterCommand = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = `
+        You are a shopping assistant that helps users filter products.
+        Analyze this voice command and determine the filters to apply.
+        Command: "${transcript}"
+
+        Available filters:
+        - Colors: ${filterOptions.colors.join(", ")}
+        - Sizes: ${filterOptions.sizes.join(", ")}
+        - Materials: ${filterOptions.materials.join(", ")}
+        - Genders: ${filterOptions.genders.join(", ")}
+        - Brands: ${filterOptions.brands.join(", ")}
+        - Categories: ${filterOptions.subCategories.join(", ")}
+        - Price Range: Any range between 0-200 dollars
+
+        Return a JSON object with ONLY the filters mentioned in the command.
+        Example response format: 
+        {
+          "colors": ["red", "blue"],
+          "sizes": ["M", "L"],
+          "price": [50, 100],
+          "brands": ["Nike"],
+          "genders": ["men"],
+          "materials": [],
+          "subCategories": []
+        }
+        
+        Only include filters that were explicitly mentioned. Use empty arrays for filter types not mentioned.
+        For price, use the format [min, max] with values between 0-200.
+        If no specific filters were detected, return an empty object {}.
+      `;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text();
+      const cleanedResponse = response
+        .replace("```json", "")
+        .replace("```", "");
+      console.log(cleanedResponse);
+
+      try {
+        const parsedFilters = JSON.parse(cleanedResponse.trim());
+        console.log("Detected filters:", parsedFilters);
+
+        if (Object.keys(parsedFilters).length > 0) {
+          updateFilters(parsedFilters);
+          return "filters_updated";
+        }
+      } catch (error) {
+        console.error("Error parsing filter JSON:", error);
+      }
+
+      return "unknown";
+    } catch (error) {
+      console.error("Filter interpretation error:", error);
+      return "unknown";
+    }
+  };
+
+  // Update the handleVoiceCommand function
   const handleVoiceCommand = async (command: string) => {
     console.log("Processing command:", command);
 
+    // Check for filter-specific commands first
+    if (command.includes("clear filter") || command.includes("reset filter")) {
+      clearFilters();
+      console.log("Filters cleared");
+      return;
+    }
+
+    // Try to interpret as filter command
+    const filterResult = await interpretFilterCommand(command);
+    if (filterResult === "filters_updated") {
+      console.log("Filters updated via voice");
+      return;
+    }
+
+    // If not a filter command, process as navigation command
     const action = await interpretCommand(command);
     console.log("Interpreted action:", action);
 
@@ -157,6 +253,12 @@ export const VoiceListener = () => {
         break;
       case "showRunningGear":
         await navigate("/products/jogging");
+        break;
+      case "applyFilters":
+        // Already handled by interpretFilterCommand
+        break;
+      case "clearFilters":
+        clearFilters();
         break;
       default:
         console.log("Unknown command:", command);
