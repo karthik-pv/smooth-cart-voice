@@ -1,9 +1,8 @@
-
-import React, { useState, useEffect } from 'react';
-import { Mic, MicOff } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { Mic, MicOff } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
+import { useLocation } from "react-router-dom";
 
 export const VoiceAssistant = () => {
   const [isActive, setIsActive] = useState(false);
@@ -26,23 +25,23 @@ export const VoiceAssistant = () => {
 
   const getHintForPath = () => {
     const path = location.pathname;
-    
-    if (path === '/' || path === '/intro') {
+
+    if (path === "/" || path === "/intro") {
       return "Say 'Hey Voix Nova'";
-    } else if (path === '/categories') {
+    } else if (path === "/categories") {
       return "Try saying 'I'm joining gym and searching for new clothes'";
-    } else if (path.includes('/products')) {
+    } else if (path.includes("/products")) {
       return "Ask me about product recommendations";
-    } else if (path.includes('/product')) {
+    } else if (path.includes("/product")) {
       return "Ask about this product's features";
-    } else if (path === '/cart') {
+    } else if (path === "/cart") {
       return "Say 'Checkout' to proceed to payment";
-    } else if (path === '/payment') {
+    } else if (path === "/payment") {
       return "Say 'Complete my order' to finish";
-    } else if (path === '/confirmation') {
+    } else if (path === "/confirmation") {
       return "Ask about your order status";
     }
-    
+
     return "How can I help you today?";
   };
 
@@ -50,7 +49,7 @@ export const VoiceAssistant = () => {
     <div className="fixed bottom-6 left-6 z-50">
       <AnimatePresence>
         {showHint && !isActive && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.9 }}
@@ -61,7 +60,7 @@ export const VoiceAssistant = () => {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       <motion.button
         className={cn(
           "flex items-center justify-center rounded-full w-14 h-14 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg",
@@ -74,7 +73,7 @@ export const VoiceAssistant = () => {
       >
         <AnimatePresence mode="wait">
           {isActive ? (
-            <motion.div 
+            <motion.div
               key="active"
               className="relative"
               initial={{ opacity: 0 }}
@@ -94,7 +93,7 @@ export const VoiceAssistant = () => {
                       duration: 0.8,
                       repeat: Infinity,
                       delay: index * 0.1,
-                      ease: "easeInOut"
+                      ease: "easeInOut",
                     }}
                   />
                 ))}
