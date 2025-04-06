@@ -57,18 +57,32 @@ export const FilterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         // Handle array filters by adding new values
         else if (Array.isArray(newFilters[filterKey]) && Array.isArray(updatedFilters[filterKey])) {
-          // Convert all values to lowercase for case-insensitive comparison
+          // Improved case-insensitive comparison
           const existingValues = (updatedFilters[filterKey] as string[]).map(v => v.toLowerCase());
-          const newValues = (newFilters[filterKey] as string[])
+          
+          // Process each new value
+          (newFilters[filterKey] as string[])
             .filter(v => v) // Filter out empty values
-            .map(v => v.toLowerCase());
-            
-          // Add only values that don't already exist
-          newValues.forEach(value => {
-            if (!existingValues.includes(value)) {
-              (updatedFilters[filterKey] as string[]).push(value);
-            }
-          });
+            .forEach(value => {
+              const lowerValue = value.toLowerCase();
+              
+              // Only add if it doesn't already exist (case-insensitive)
+              if (!existingValues.includes(lowerValue)) {
+                // For brands specifically, try to match with correct casing from filterOptions
+                if (filterKey === 'brands') {
+                  const correctCaseBrand = filterOptions.brands.find(
+                    b => b.toLowerCase() === lowerValue
+                  );
+                  if (correctCaseBrand) {
+                    (updatedFilters[filterKey] as string[]).push(correctCaseBrand);
+                  } else {
+                    (updatedFilters[filterKey] as string[]).push(value);
+                  }
+                } else {
+                  (updatedFilters[filterKey] as string[]).push(value);
+                }
+              }
+            });
         }
       });
       

@@ -299,6 +299,7 @@ export const VoiceListener = () => {
         filterOptions.subCategories.map((c) => [c.toLowerCase(), c])
       );
 
+      // Update the prompt to emphasize returning lowercase values
       const prompt = `
         You are a shopping assistant that helps users filter products.
         Analyze this voice command and determine the filters to apply.
@@ -329,8 +330,7 @@ export const VoiceListener = () => {
         For price, use the format [min, max] with values between 0-200.
         If no specific filters were detected, return an empty object {}.
         
-        Make sure all filter values exactly match the available options provided above.
-        Return all values in lowercase for consistency.
+        CRITICAL: Return all values in lowercase for consistency. For example, if the user mentions "PowerLift", return it as "powerlift".
       `;
 
       const result = await model.generateContent(prompt);
