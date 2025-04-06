@@ -1,20 +1,19 @@
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Layout } from '@/components/Layout';
-import { ArrowRight, Sparkles, ShoppingBag, Mic } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Layout } from "@/components/Layout";
+import { ArrowRight, Sparkles, ShoppingBag, Mic } from "lucide-react";
+import { motion } from "framer-motion";
 
 const IntroPage = () => {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
-  
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoaded(true);
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -24,14 +23,18 @@ const IntroPage = () => {
       opacity: 1,
       transition: {
         staggerChildren: 0.2,
-        delayChildren: 0.3
-      }
-    }
+        delayChildren: 0.3,
+      },
+    },
   };
 
   const item = {
     hidden: { y: 20, opacity: 0 },
-    show: { y: 0, opacity: 1, transition: { duration: 0.8, ease: [0.04, 0.62, 0.23, 0.98] } }
+    show: {
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.8, ease: [0.04, 0.62, 0.23, 0.98] },
+    },
   };
 
   return (
@@ -45,22 +48,19 @@ const IntroPage = () => {
             <div className="absolute top-[60%] left-[30%] w-80 h-80 bg-pink-600 rounded-full filter blur-[180px]" />
           </div>
         </div>
-        
+
         {/* Grid Pattern Overlay */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDIwMjAiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0aDR2MWgtNHYtMXptMC01aDR2MWgtNHYtMXptMC01aDR2MWgtNHYtMXpNMTAgNGg0djFoLTR2LTF6bTAtM2g0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6bTUgMGg0djFoLTR2LTF6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30 z-0"></div>
-        
+
         <div className="container mx-auto px-4 py-8 md:py-20 relative z-10 flex flex-col items-center justify-center min-h-screen">
-          <motion.div 
+          <motion.div
             variants={container}
             initial="hidden"
             animate={loaded ? "show" : "hidden"}
             className="max-w-4xl mx-auto text-center"
           >
             {/* Logo */}
-            <motion.div 
-              variants={item}
-              className="mb-8 inline-block"
-            >
+            <motion.div variants={item} className="mb-8 inline-block">
               <div className="relative">
                 <div className="w-24 h-24 mx-auto bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center shadow-xl transform -rotate-6">
                   <div className="w-20 h-20 bg-black rounded-xl flex items-center justify-center">
@@ -72,16 +72,16 @@ const IntroPage = () => {
                 </div>
               </div>
             </motion.div>
-            
+
             {/* Heading */}
-            <motion.h1 
+            <motion.h1
               variants={item}
               className="text-5xl md:text-7xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white via-purple-200 to-pink-100"
             >
               VOIX NOVA
             </motion.h1>
-            
-            <motion.div 
+
+            <motion.div
               variants={item}
               className="flex items-center justify-center gap-1.5 mb-8"
             >
@@ -91,20 +91,18 @@ const IntroPage = () => {
               </p>
               <div className="h-0.5 w-12 bg-gradient-to-l from-purple-500 to-transparent rounded"></div>
             </motion.div>
-            
+
             {/* Description */}
-            <motion.p 
+            <motion.p
               variants={item}
               className="text-lg md:text-2xl text-gray-300 mb-10 max-w-2xl mx-auto leading-relaxed"
             >
-              Your personal AI-powered shopping companion that helps you find the perfect fitness gear with voice commands.
+              Your personal AI-powered shopping companion that helps you find
+              the perfect fitness gear with voice commands.
             </motion.p>
-            
+
             {/* AI Assistant Circle */}
-            <motion.div 
-              variants={item}
-              className="mb-12 relative"
-            >
+            <motion.div variants={item} className="mb-12 relative">
               <div className="relative">
                 <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 mx-auto flex items-center justify-center shadow-lg overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-black/10"></div>
@@ -122,12 +120,14 @@ const IntroPage = () => {
                               duration: 1.5,
                               repeat: Infinity,
                               delay: i * 0.2,
-                              ease: "easeInOut"
+                              ease: "easeInOut",
                             }}
                           />
                         ))}
                       </div>
-                      <div className="mt-2 text-white text-xs font-bold uppercase tracking-wider">Active</div>
+                      <div className="mt-2 text-white text-xs font-bold uppercase tracking-wider">
+                        Active
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -152,7 +152,7 @@ const IntroPage = () => {
                 </p>
               </div>
             </motion.div>
-            
+
             {/* Features */}
             <motion.div
               variants={item}
@@ -162,44 +162,43 @@ const IntroPage = () => {
                 {
                   title: "Voice Shopping",
                   description: "Find products using natural voice commands",
-                  icon: <Mic className="w-6 h-6" />
+                  icon: <Mic className="w-6 h-6" />,
                 },
                 {
                   title: "Smart Recommendations",
                   description: "Get personalized product suggestions",
-                  icon: <Sparkles className="w-6 h-6" />
+                  icon: <Sparkles className="w-6 h-6" />,
                 },
                 {
                   title: "Seamless Experience",
                   description: "Shop hands-free from browsing to checkout",
-                  icon: <ShoppingBag className="w-6 h-6" />
-                }
+                  icon: <ShoppingBag className="w-6 h-6" />,
+                },
               ].map((feature, i) => (
-                <div 
+                <div
                   key={i}
                   className="p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors"
                 >
                   <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center mb-4 mx-auto">
                     {feature.icon}
                   </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">{feature.title}</h3>
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    {feature.title}
+                  </h3>
                   <p className="text-gray-300 text-sm">{feature.description}</p>
                 </div>
               ))}
             </motion.div>
-            
+
             {/* CTA Button */}
-            <motion.div
-              variants={item}
-              className="space-y-6"
-            >
-              <Button 
+            <motion.div variants={item} className="space-y-6">
+              <Button
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium py-6 px-8 rounded-full text-lg flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
-                onClick={() => navigate('/categories')}
+                onClick={() => navigate("/categories")}
               >
                 Get Started <ArrowRight className="ml-2" size={18} />
               </Button>
-              
+
               <p className="text-sm text-gray-400">
                 Use the voice assistant at the bottom left to navigate by voice
               </p>

@@ -10,6 +10,7 @@ const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 // Add these imports
 import { useFilters, FilterState } from "@/context/FilterContext";
 import { filterOptions } from "@/data/products";
+import { useProduct } from "@/context/ProductContext"; // Add this import
 
 // Add this to the availableFunctions object
 const availableFunctions = {
@@ -69,9 +70,11 @@ const availableFunctions = {
 export const VoiceListener = () => {
   // Add this near the top of the component
   const { updateFilters, clearFilters } = useFilters();
+  const { setSelectedSize, setQuantity } = useProduct(); // Add this line to get the context functions
 
   const [transcript, setTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [lastAction, setLastAction] = useState<string>("");
   const navigate = useNavigate();
   const recognitionRef = useRef<any>(null);
 
@@ -224,14 +227,14 @@ export const VoiceListener = () => {
   const handleProductDetailNavigation = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
+
       // Create a list of product names and IDs for reference
-      const productList = products.map(p => ({
+      const productList = products.map((p) => ({
         id: p.id,
         name: p.name.toLowerCase(),
-        keywords: p.name.toLowerCase().split(' ')
+        keywords: p.name.toLowerCase().split(" "),
       }));
-      
+
       const prompt = `
         You are a shopping assistant for a sports apparel website.
         Analyze this voice command and determine if the user is asking to view details about a specific product.
@@ -239,7 +242,9 @@ export const VoiceListener = () => {
         User command: "${transcript}"
         
         Available products:
-        ${products.map(p => `- ${p.name}: ${p.description.substring(0, 50)}...`).join('\n')}
+        ${products
+          .map((p) => `- ${p.name}: ${p.description.substring(0, 50)}...`)
+          .join("\n")}
         
         INSTRUCTIONS:
         1. If the user is asking to see details, view, or get more information about a specific product, identify which product they're referring to.
@@ -248,45 +253,46 @@ export const VoiceListener = () => {
         
         Return ONLY the product name or "none". Do not include any other text in your response.
       `;
-      
+
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim();
-      
+
       if (response.toLowerCase() !== "none") {
         // Try to find the product by name (case insensitive)
         const productName = response.toLowerCase();
-        
+
         // First try exact match
-        let matchedProduct = products.find(p => 
-          p.name.toLowerCase() === productName
+        let matchedProduct = products.find(
+          (p) => p.name.toLowerCase() === productName
         );
-        
+
         // If no exact match, try partial match
         if (!matchedProduct) {
-          matchedProduct = products.find(p => 
-            p.name.toLowerCase().includes(productName) || 
-            productName.includes(p.name.toLowerCase())
+          matchedProduct = products.find(
+            (p) =>
+              p.name.toLowerCase().includes(productName) ||
+              productName.includes(p.name.toLowerCase())
           );
         }
-        
+
         // If still no match, try keyword matching
         if (!matchedProduct) {
-          const words = productName.split(' ').filter(w => w.length > 3);
+          const words = productName.split(" ").filter((w) => w.length > 3);
           for (const word of words) {
-            matchedProduct = products.find(p => 
+            matchedProduct = products.find((p) =>
               p.name.toLowerCase().includes(word)
             );
             if (matchedProduct) break;
           }
         }
-        
+
         if (matchedProduct) {
           console.log(`Navigating to product: ${matchedProduct.name}`);
           await navigate(`/product/${matchedProduct.id}`);
           return true;
         }
       }
-      
+
       return false;
     } catch (error) {
       console.error("Product detail navigation error:", error);
@@ -297,50 +303,68 @@ export const VoiceListener = () => {
   // Update the handleVoiceCommand function to check for product detail navigation
   const handleVoiceCommand = async (command: string) => {
     console.log("Processing command:", command);
+
+    // Set the last action to show feedback to the user
+    setLastAction(`Processing: "${command}"`);
+
+    const isProductAction = await handleProductActions(command);
+    if (isProductAction) {
+      setLastAction(`Product action completed: "${command}"`);
+      return;
+    }
     
     // First check if this is a product detail navigation command
     const isProductDetailNavigation = await handleProductDetailNavigation(command);
     if (isProductDetailNavigation) {
+      setLastAction(`Navigating to product: "${command}"`);
       return;
     }
-    
+
     // Then check if this is a category navigation command
     const isCategoryNavigation = await handleCategoryNavigation(command);
     if (isCategoryNavigation) {
+      setLastAction(`Navigating to category: "${command}"`);
       return;
     }
-    
+
     // Then check if this is a clear filters command
     const isFilterCleared = await handleClearFilters(command);
     if (isFilterCleared) {
+      setLastAction(`Filters cleared: "${command}"`);
       return;
     }
-    
+
     // Then check for filter updates
     const filterResult = await interpretFilterCommand(command);
     if (filterResult === "filters_updated") {
+      setLastAction(`Filters updated: "${command}"`);
       console.log("Filters updated via voice");
       return;
     }
-    
+
     // Finally, handle other commands
     const action = await interpretCommand(command);
     console.log("Interpreted action:", action);
-
+    
     switch (action) {
       case "showGymClothes":
+        setLastAction("Navigating to gym products");
         await navigate("/products/gym");
         break;
       case "showYogaEquipment":
+        setLastAction("Navigating to yoga products");
         await navigate("/products/yoga");
         break;
       case "goToCart":
+        setLastAction("Navigating to cart");
         await navigate("/cart");
         break;
       case "checkout":
+        setLastAction("Navigating to checkout");
         await navigate("/payment");
         break;
       case "showRunningGear":
+        setLastAction("Navigating to running products");
         await navigate("/products/jogging");
         break;
       case "applyFilters":
@@ -349,13 +373,16 @@ export const VoiceListener = () => {
       case "clearFilters":
         // Call the clearFilters function from context
         clearFilters();
+        setLastAction("All filters cleared");
         console.log("All filters cleared via action handler");
         break;
       default:
+        setLastAction(`Command not recognized: "${command}"`);
         console.log("Unknown command:", command);
     }
   };
 
+  // Improve the interpretFilterCommand function to ensure case matching
   const interpretFilterCommand = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -429,44 +456,51 @@ export const VoiceListener = () => {
         const normalizedFilters: Partial<FilterState> = {};
 
         // Process each filter type with proper key names and restore original casing
-        if (parsedFilters.colors) {
+        if (parsedFilters.colors && parsedFilters.colors.length > 0) {
           normalizedFilters.colors = parsedFilters.colors.map(
             (c: string) => colorMap[c.toLowerCase()] || c
           );
+          console.log("Normalized colors:", normalizedFilters.colors);
         }
 
-        if (parsedFilters.sizes) {
+        if (parsedFilters.sizes && parsedFilters.sizes.length > 0) {
           normalizedFilters.sizes = parsedFilters.sizes.map(
             (s: string) => sizeMap[s.toLowerCase()] || s
           );
+          console.log("Normalized sizes:", normalizedFilters.sizes);
         }
 
-        if (parsedFilters.materials) {
+        if (parsedFilters.materials && parsedFilters.materials.length > 0) {
           normalizedFilters.materials = parsedFilters.materials.map(
             (m: string) => materialMap[m.toLowerCase()] || m
           );
+          console.log("Normalized materials:", normalizedFilters.materials);
         }
 
-        if (parsedFilters.genders) {
+        if (parsedFilters.genders && parsedFilters.genders.length > 0) {
           normalizedFilters.genders = parsedFilters.genders.map(
             (g: string) => genderMap[g.toLowerCase()] || g
           );
+          console.log("Normalized genders:", normalizedFilters.genders);
         }
 
-        if (parsedFilters.brands) {
+        if (parsedFilters.brands && parsedFilters.brands.length > 0) {
           normalizedFilters.brands = parsedFilters.brands.map(
             (b: string) => brandMap[b.toLowerCase()] || b
           );
+          console.log("Normalized brands:", normalizedFilters.brands);
         }
 
-        if (parsedFilters.subCategories) {
+        if (parsedFilters.subCategories && parsedFilters.subCategories.length > 0) {
           normalizedFilters.subCategories = parsedFilters.subCategories.map(
             (c: string) => categoryMap[c.toLowerCase()] || c
           );
+          console.log("Normalized categories:", normalizedFilters.subCategories);
         }
 
         if (parsedFilters.price) {
           normalizedFilters.price = parsedFilters.price;
+          console.log("Normalized price:", normalizedFilters.price);
         }
 
         if (Object.keys(normalizedFilters).length > 0) {
@@ -532,6 +566,123 @@ export const VoiceListener = () => {
       return false;
     } catch (error) {
       console.error("Category navigation detection error:", error);
+      return false;
+    }
+  };
+  const handleProductActions = async (transcript: string) => {
+    try {
+      // Check if we're on a product page by looking at the URL
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith("/product/")) {
+        return false;
+      }
+  
+      const productId = currentPath.split("/").pop();
+      const product = products.find((p) => p.id === productId);
+  
+      if (!product) {
+        console.error("Product not found:", productId);
+        return false;
+      }
+  
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+      const prompt = `
+        You are a shopping assistant for a sports apparel website.
+        The user is currently viewing this product: ${product.name}
+        Available sizes: ${product.sizes.join(", ")}
+        
+        Analyze this voice command: "${transcript}"
+        
+        Determine if the user wants to:
+        1. Select a specific size
+        2. Change the quantity
+        3. Add the product to cart
+        
+        Return a JSON object with the following structure:
+        {
+          "action": "size" | "quantity" | "addToCart" | "none",
+          "size": "the size mentioned" | null,
+          "quantity": number | null
+        }
+        
+        INSTRUCTIONS:
+        - For size, return the exact size as listed in available sizes, or null if no size mentioned
+        - For quantity, return the number mentioned, or null if no quantity mentioned
+        - If the user wants to add to cart, set action to "addToCart"
+        - If no relevant action is detected, set action to "none"
+        - Return ONLY the JSON object, no other text
+      `;
+  
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text();
+      const cleanedResponse = response
+        .replace("```json", "")
+        .replace("```", "");
+
+      try {
+        const parsedAction = JSON.parse(cleanedResponse.trim());
+        console.log("Detected product action:", parsedAction);
+  
+        if (parsedAction.action === "none") {
+          return false;
+        }
+  
+        // Handle size selection - update to use context
+        if (parsedAction.action === "size" && parsedAction.size) {
+          // Find the matching size (case-insensitive)
+          const matchedSize = product.sizes.find(
+            size => size.toLowerCase() === parsedAction.size.toLowerCase()
+          );
+          
+          if (matchedSize) {
+            // Update the context with the correct case
+            setSelectedSize(matchedSize);
+            console.log(`Selected size: ${matchedSize}`);
+            return true;
+          } else {
+            console.log(`Size not found: ${parsedAction.size}`);
+          }
+        }
+  
+        // Handle quantity change - update to use context
+        if (parsedAction.action === "quantity" && parsedAction.quantity) {
+          const newQuantity = parseInt(parsedAction.quantity);
+          if (!isNaN(newQuantity) && newQuantity > 0) {
+            setQuantity(newQuantity);
+            console.log(`Set quantity to: ${newQuantity}`);
+            return true;
+          }
+        }
+  
+        // Handle add to cart - keep DOM manipulation for this action
+        if (parsedAction.action === "addToCart") {
+          const addToCartButton = document.querySelector(
+            'button[data-action="add-to-cart"]'
+          ) as HTMLElement;
+          if (addToCartButton) {
+            addToCartButton.click();
+            console.log("Added product to cart");
+          } else {
+            // Try to find button by text content
+            const buttons = document.querySelectorAll("button");
+            for (const button of Array.from(buttons)) {
+              if (button.textContent?.toLowerCase().includes("add to cart")) {
+                (button as HTMLElement).click();
+                console.log("Added product to cart");
+                break;
+              }
+            }
+          }
+        }
+  
+        return true;
+      } catch (error) {
+        console.error("Error parsing product action JSON:", error);
+        return false;
+      }
+    } catch (error) {
+      console.error("Product action error:", error);
       return false;
     }
   };
