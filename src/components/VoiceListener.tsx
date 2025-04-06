@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { products } from "@/data/products"; // Make sure we import products
 
 // Initialize Gemini with Vite environment variable
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
@@ -219,29 +220,109 @@ export const VoiceListener = () => {
     }
   };
 
-  // Update the handleVoiceCommand function to check for category navigation first
+  // Add a new function to handle product detail navigation
+  const handleProductDetailNavigation = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      // Create a list of product names and IDs for reference
+      const productList = products.map(p => ({
+        id: p.id,
+        name: p.name.toLowerCase(),
+        keywords: p.name.toLowerCase().split(' ')
+      }));
+      
+      const prompt = `
+        You are a shopping assistant for a sports apparel website.
+        Analyze this voice command and determine if the user is asking to view details about a specific product.
+        
+        User command: "${transcript}"
+        
+        Available products:
+        ${products.map(p => `- ${p.name}: ${p.description.substring(0, 50)}...`).join('\n')}
+        
+        INSTRUCTIONS:
+        1. If the user is asking to see details, view, or get more information about a specific product, identify which product they're referring to.
+        2. Return ONLY the exact product name as listed above if you can identify it.
+        3. If the user is not asking about a specific product or you cannot determine which product, return "none".
+        
+        Return ONLY the product name or "none". Do not include any other text in your response.
+      `;
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text().trim();
+      
+      if (response.toLowerCase() !== "none") {
+        // Try to find the product by name (case insensitive)
+        const productName = response.toLowerCase();
+        
+        // First try exact match
+        let matchedProduct = products.find(p => 
+          p.name.toLowerCase() === productName
+        );
+        
+        // If no exact match, try partial match
+        if (!matchedProduct) {
+          matchedProduct = products.find(p => 
+            p.name.toLowerCase().includes(productName) || 
+            productName.includes(p.name.toLowerCase())
+          );
+        }
+        
+        // If still no match, try keyword matching
+        if (!matchedProduct) {
+          const words = productName.split(' ').filter(w => w.length > 3);
+          for (const word of words) {
+            matchedProduct = products.find(p => 
+              p.name.toLowerCase().includes(word)
+            );
+            if (matchedProduct) break;
+          }
+        }
+        
+        if (matchedProduct) {
+          console.log(`Navigating to product: ${matchedProduct.name}`);
+          await navigate(`/product/${matchedProduct.id}`);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Product detail navigation error:", error);
+      return false;
+    }
+  };
+
+  // Update the handleVoiceCommand function to check for product detail navigation
   const handleVoiceCommand = async (command: string) => {
     console.log("Processing command:", command);
-
-    // First check if this is a category navigation command
+    
+    // First check if this is a product detail navigation command
+    const isProductDetailNavigation = await handleProductDetailNavigation(command);
+    if (isProductDetailNavigation) {
+      return;
+    }
+    
+    // Then check if this is a category navigation command
     const isCategoryNavigation = await handleCategoryNavigation(command);
     if (isCategoryNavigation) {
       return;
     }
-
+    
     // Then check if this is a clear filters command
     const isFilterCleared = await handleClearFilters(command);
     if (isFilterCleared) {
       return;
     }
-
+    
     // Then check for filter updates
     const filterResult = await interpretFilterCommand(command);
     if (filterResult === "filters_updated") {
       console.log("Filters updated via voice");
       return;
     }
-
+    
     // Finally, handle other commands
     const action = await interpretCommand(command);
     console.log("Interpreted action:", action);
