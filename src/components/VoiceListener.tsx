@@ -24,6 +24,18 @@ const availableFunctions = {
       "Execute this function if the user is interested in any yoga activities or asks about yoga in general.",
     parameters: {},
   },
+  navigateToCategory: {
+    name: "navigateToCategory",
+    description:
+      "Navigate to a specific product category (gym, yoga, or running/jogging)",
+    parameters: {
+      category: {
+        type: "string",
+        enum: ["gym", "yoga", "running"],
+        description: "The category to navigate to",
+      },
+    },
+  },
   goToCart: {
     name: "goToCart",
     description: "Navigate to shopping cart",
@@ -131,16 +143,16 @@ export const VoiceListener = () => {
     try {
       // First, directly check for clear filter phrases
       const clearFilterPhrases = [
-        "clear filter", 
-        "reset filter", 
-        "remove filter", 
-        "clear all filter", 
+        "clear filter",
+        "reset filter",
+        "remove filter",
+        "clear all filter",
         "reset all filter",
         "remove all filter",
         "clear the filter",
-        "start over"
+        "start over",
       ];
-      
+
       // Check if the transcript contains any clear filter phrases
       for (const phrase of clearFilterPhrases) {
         if (transcript.includes(phrase)) {
@@ -148,9 +160,9 @@ export const VoiceListener = () => {
           return "clearFilters";
         }
       }
-      
+
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  
+
       const prompt = `
         You are a shopping assistant that helps users navigate an e-commerce website.
         Analyze the following voice command and determine which function to call.
@@ -166,7 +178,7 @@ export const VoiceListener = () => {
         IMPORTANT: If the user is asking to clear, reset, or remove filters in ANY way, you MUST return "clearFilters".
         Do not include any other text in your response.
       `;
-  
+
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim();
       return response;
@@ -180,7 +192,7 @@ export const VoiceListener = () => {
   const handleClearFilters = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
+
       const prompt = `
         You are a shopping assistant that helps users with filtering products.
         Analyze this voice command and determine if the user wants to clear or reset all filters.
@@ -190,16 +202,16 @@ export const VoiceListener = () => {
         Return ONLY "yes" if the user wants to clear/reset filters, or "no" if not.
         Examples of clear filter commands: "clear filters", "reset filters", "remove all filters", "start over with filters", etc.
       `;
-      
+
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim().toLowerCase();
-      
+
       if (response === "yes") {
         clearFilters();
         console.log("All filters cleared via dedicated function");
         return true;
       }
-      
+
       return false;
     } catch (error) {
       console.error("Clear filters detection error:", error);
@@ -207,27 +219,33 @@ export const VoiceListener = () => {
     }
   };
 
-  // Update the handleVoiceCommand function to prioritize clear filters detection
+  // Update the handleVoiceCommand function to check for category navigation first
   const handleVoiceCommand = async (command: string) => {
     console.log("Processing command:", command);
-    
-    // First check if this is a clear filters command using the dedicated function
+
+    // First check if this is a category navigation command
+    const isCategoryNavigation = await handleCategoryNavigation(command);
+    if (isCategoryNavigation) {
+      return;
+    }
+
+    // Then check if this is a clear filters command
     const isFilterCleared = await handleClearFilters(command);
     if (isFilterCleared) {
       return;
     }
-    
+
     // Then check for filter updates
     const filterResult = await interpretFilterCommand(command);
     if (filterResult === "filters_updated") {
       console.log("Filters updated via voice");
       return;
     }
-    
-    // Finally, handle navigation and other commands
+
+    // Finally, handle other commands
     const action = await interpretCommand(command);
     console.log("Interpreted action:", action);
-    
+
     switch (action) {
       case "showGymClothes":
         await navigate("/products/gym");
@@ -263,22 +281,22 @@ export const VoiceListener = () => {
 
       // Create reference maps for exact casing
       const colorMap = Object.fromEntries(
-        filterOptions.colors.map(c => [c.toLowerCase(), c])
+        filterOptions.colors.map((c) => [c.toLowerCase(), c])
       );
       const sizeMap = Object.fromEntries(
-        filterOptions.sizes.map(s => [s.toLowerCase(), s])
+        filterOptions.sizes.map((s) => [s.toLowerCase(), s])
       );
       const materialMap = Object.fromEntries(
-        filterOptions.materials.map(m => [m.toLowerCase(), m])
+        filterOptions.materials.map((m) => [m.toLowerCase(), m])
       );
       const genderMap = Object.fromEntries(
-        filterOptions.genders.map(g => [g.toLowerCase(), g])
+        filterOptions.genders.map((g) => [g.toLowerCase(), g])
       );
       const brandMap = Object.fromEntries(
-        filterOptions.brands.map(b => [b.toLowerCase(), b])
+        filterOptions.brands.map((b) => [b.toLowerCase(), b])
       );
       const categoryMap = Object.fromEntries(
-        filterOptions.subCategories.map(c => [c.toLowerCase(), c])
+        filterOptions.subCategories.map((c) => [c.toLowerCase(), c])
       );
 
       const prompt = `
@@ -328,48 +346,48 @@ export const VoiceListener = () => {
 
         // Normalize filter keys to ensure consistency and preserve original casing
         const normalizedFilters: Partial<FilterState> = {};
-        
+
         // Process each filter type with proper key names and restore original casing
         if (parsedFilters.colors) {
-          normalizedFilters.colors = parsedFilters.colors.map((c: string) => 
-            colorMap[c.toLowerCase()] || c
+          normalizedFilters.colors = parsedFilters.colors.map(
+            (c: string) => colorMap[c.toLowerCase()] || c
           );
         }
-        
+
         if (parsedFilters.sizes) {
-          normalizedFilters.sizes = parsedFilters.sizes.map((s: string) => 
-            sizeMap[s.toLowerCase()] || s
+          normalizedFilters.sizes = parsedFilters.sizes.map(
+            (s: string) => sizeMap[s.toLowerCase()] || s
           );
         }
-        
+
         if (parsedFilters.materials) {
-          normalizedFilters.materials = parsedFilters.materials.map((m: string) => 
-            materialMap[m.toLowerCase()] || m
+          normalizedFilters.materials = parsedFilters.materials.map(
+            (m: string) => materialMap[m.toLowerCase()] || m
           );
         }
-        
+
         if (parsedFilters.genders) {
-          normalizedFilters.genders = parsedFilters.genders.map((g: string) => 
-            genderMap[g.toLowerCase()] || g
+          normalizedFilters.genders = parsedFilters.genders.map(
+            (g: string) => genderMap[g.toLowerCase()] || g
           );
         }
-        
+
         if (parsedFilters.brands) {
-          normalizedFilters.brands = parsedFilters.brands.map((b: string) => 
-            brandMap[b.toLowerCase()] || b
+          normalizedFilters.brands = parsedFilters.brands.map(
+            (b: string) => brandMap[b.toLowerCase()] || b
           );
         }
-        
+
         if (parsedFilters.subCategories) {
-          normalizedFilters.subCategories = parsedFilters.subCategories.map((c: string) => 
-            categoryMap[c.toLowerCase()] || c
+          normalizedFilters.subCategories = parsedFilters.subCategories.map(
+            (c: string) => categoryMap[c.toLowerCase()] || c
           );
         }
-        
+
         if (parsedFilters.price) {
           normalizedFilters.price = parsedFilters.price;
         }
-        
+
         if (Object.keys(normalizedFilters).length > 0) {
           // This will add to existing filters rather than replace them
           updateFilters(normalizedFilters);
@@ -383,6 +401,57 @@ export const VoiceListener = () => {
     } catch (error) {
       console.error("Filter interpretation error:", error);
       return "unknown";
+    }
+  };
+
+  // Move handleCategoryNavigation inside the component
+  const handleCategoryNavigation = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = `
+      You are a shopping assistant for a sports apparel website.
+      Analyze this voice command and determine if the user is interested in one of our main product categories.
+      
+      User command: "${transcript}"
+      
+      Main categories:
+      - "gym": Anything related to gym, fitness, weightlifting, strength training, bodybuilding, workout equipment, gym clothes, etc.
+      - "yoga": Anything related to yoga, meditation, stretching, flexibility, yoga mats, yoga clothes, etc.
+      - "running": Anything related to running, jogging, marathons, sprinting, track, trail running, running shoes, running clothes, etc.
+      
+      IMPORTANT INSTRUCTIONS:
+      1. If the user mentions ANY term related to running, marathons, jogging, or similar activities, return "running".
+      2. If the user mentions ANY term related to yoga, meditation, or similar activities, return "yoga".
+      3. If the user mentions ANY term related to gym, fitness, weightlifting, or similar activities, return "gym".
+      4. If the user's request is about applying filters to products and NOT about a specific category, return "none".
+      5. If the user's request is not related to any specific category, return "none".
+      
+      Return ONLY one of these values: "gym", "yoga", "running", or "none".
+      Do not include any other text in your response.
+    `;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text().trim().toLowerCase();
+
+      if (response === "gym") {
+        console.log("Navigating to gym category");
+        await navigate("/products/gym");
+        return true;
+      } else if (response === "yoga") {
+        console.log("Navigating to yoga category");
+        await navigate("/products/yoga");
+        return true;
+      } else if (response === "running") {
+        console.log("Navigating to running category");
+        await navigate("/products/jogging");
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Category navigation detection error:", error);
+      return false;
     }
   };
 
