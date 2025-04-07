@@ -307,14 +307,22 @@ export const VoiceListener = () => {
     // Set the last action to show feedback to the user
     setLastAction(`Processing: "${command}"`);
 
+    const isCartNavigation = await handleCartNavigation(command);
+    if (isCartNavigation) {
+      setLastAction(`Navigating to cart: "${command}"`);
+      return;
+    }
+
     const isProductAction = await handleProductActions(command);
     if (isProductAction) {
       setLastAction(`Product action completed: "${command}"`);
       return;
     }
-    
+
     // First check if this is a product detail navigation command
-    const isProductDetailNavigation = await handleProductDetailNavigation(command);
+    const isProductDetailNavigation = await handleProductDetailNavigation(
+      command
+    );
     if (isProductDetailNavigation) {
       setLastAction(`Navigating to product: "${command}"`);
       return;
@@ -345,7 +353,7 @@ export const VoiceListener = () => {
     // Finally, handle other commands
     const action = await interpretCommand(command);
     console.log("Interpreted action:", action);
-    
+
     switch (action) {
       case "showGymClothes":
         setLastAction("Navigating to gym products");
@@ -491,11 +499,17 @@ export const VoiceListener = () => {
           console.log("Normalized brands:", normalizedFilters.brands);
         }
 
-        if (parsedFilters.subCategories && parsedFilters.subCategories.length > 0) {
+        if (
+          parsedFilters.subCategories &&
+          parsedFilters.subCategories.length > 0
+        ) {
           normalizedFilters.subCategories = parsedFilters.subCategories.map(
             (c: string) => categoryMap[c.toLowerCase()] || c
           );
-          console.log("Normalized categories:", normalizedFilters.subCategories);
+          console.log(
+            "Normalized categories:",
+            normalizedFilters.subCategories
+          );
         }
 
         if (parsedFilters.price) {
@@ -576,17 +590,17 @@ export const VoiceListener = () => {
       if (!currentPath.startsWith("/product/")) {
         return false;
       }
-  
+
       const productId = currentPath.split("/").pop();
       const product = products.find((p) => p.id === productId);
-  
+
       if (!product) {
         console.error("Product not found:", productId);
         return false;
       }
-  
+
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  
+
       const prompt = `
         You are a shopping assistant for a sports apparel website.
         The user is currently viewing this product: ${product.name}
@@ -613,7 +627,7 @@ export const VoiceListener = () => {
         - If no relevant action is detected, set action to "none"
         - Return ONLY the JSON object, no other text
       `;
-  
+
       const result = await model.generateContent(prompt);
       const response = await result.response.text();
       const cleanedResponse = response
@@ -623,18 +637,18 @@ export const VoiceListener = () => {
       try {
         const parsedAction = JSON.parse(cleanedResponse.trim());
         console.log("Detected product action:", parsedAction);
-  
+
         if (parsedAction.action === "none") {
           return false;
         }
-  
+
         // Handle size selection - update to use context
         if (parsedAction.action === "size" && parsedAction.size) {
           // Find the matching size (case-insensitive)
           const matchedSize = product.sizes.find(
-            size => size.toLowerCase() === parsedAction.size.toLowerCase()
+            (size) => size.toLowerCase() === parsedAction.size.toLowerCase()
           );
-          
+
           if (matchedSize) {
             // Update the context with the correct case
             setSelectedSize(matchedSize);
@@ -644,7 +658,7 @@ export const VoiceListener = () => {
             console.log(`Size not found: ${parsedAction.size}`);
           }
         }
-  
+
         // Handle quantity change - update to use context
         if (parsedAction.action === "quantity" && parsedAction.quantity) {
           const newQuantity = parseInt(parsedAction.quantity);
@@ -654,7 +668,7 @@ export const VoiceListener = () => {
             return true;
           }
         }
-  
+
         // Handle add to cart - keep DOM manipulation for this action
         if (parsedAction.action === "addToCart") {
           const addToCartButton = document.querySelector(
@@ -675,7 +689,7 @@ export const VoiceListener = () => {
             }
           }
         }
-  
+
         return true;
       } catch (error) {
         console.error("Error parsing product action JSON:", error);
@@ -683,6 +697,47 @@ export const VoiceListener = () => {
       }
     } catch (error) {
       console.error("Product action error:", error);
+      return false;
+    }
+  };
+
+  const handleCartNavigation = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = `
+        You are a shopping assistant for an e-commerce website.
+        Analyze this voice command and determine if the user wants to view their shopping cart.
+        
+        User command: "${transcript}"
+        
+        Examples of cart viewing requests:
+        - "Show me my cart"
+        - "I want to see my cart"
+        - "What's in my cart"
+        - "View my shopping cart"
+        - "Go to cart"
+        - "Take me to my cart"
+        - "Show me what I've added"
+        - "View items in my cart"
+        - "Check my cart"
+        
+        Return ONLY "yes" if the user wants to view their cart, or "no" if not.
+        Do not include any other text in your response.
+      `;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text().trim().toLowerCase();
+
+      if (response === "yes") {
+        console.log("Navigating to cart page");
+        await navigate("/cart");
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Cart navigation detection error:", error);
       return false;
     }
   };
