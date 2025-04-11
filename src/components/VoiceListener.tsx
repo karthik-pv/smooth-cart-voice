@@ -782,5 +782,3 @@ export const VoiceListener = () => {
 
   return null;
 };
-
-// Add this new function after the other handler functions
