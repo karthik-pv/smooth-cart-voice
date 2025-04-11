@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState } from "react";
 import { filterOptions } from "@/data/products";
 
-export interface FilterState {
+// Make sure FilterState is properly exported
+export type FilterState = {
   colors: string[];
   sizes: string[];
   materials: string[];
@@ -10,7 +11,7 @@ export interface FilterState {
   subCategories: string[];
   price: [number, number];
   searchQuery: string;
-}
+};
 
 interface FilterContextType {
   filters: FilterState;
@@ -37,8 +38,56 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined);
 export const FilterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
 
+  // Update the updateFilters function to add to existing filters rather than replace them
   const updateFilters = (newFilters: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+    setFilters((prevFilters) => {
+      const updatedFilters = { ...prevFilters };
+      
+      // For each filter type, add new values without removing existing ones
+      Object.keys(newFilters).forEach((key) => {
+        const filterKey = key as keyof FilterState;
+        
+        // Handle price range separately
+        if (filterKey === 'price' && newFilters.price) {
+          updatedFilters.price = newFilters.price;
+        } 
+        // Handle searchQuery separately
+        else if (filterKey === 'searchQuery' && newFilters.searchQuery !== undefined) {
+          updatedFilters.searchQuery = newFilters.searchQuery;
+        }
+        // Handle array filters by adding new values
+        else if (Array.isArray(newFilters[filterKey]) && Array.isArray(updatedFilters[filterKey])) {
+          // Improved case-insensitive comparison
+          const existingValues = (updatedFilters[filterKey] as string[]).map(v => v.toLowerCase());
+          
+          // Process each new value
+          (newFilters[filterKey] as string[])
+            .filter(v => v) // Filter out empty values
+            .forEach(value => {
+              const lowerValue = value.toLowerCase();
+              
+              // Only add if it doesn't already exist (case-insensitive)
+              if (!existingValues.includes(lowerValue)) {
+                // For brands specifically, try to match with correct casing from filterOptions
+                if (filterKey === 'brands') {
+                  const correctCaseBrand = filterOptions.brands.find(
+                    b => b.toLowerCase() === lowerValue
+                  );
+                  if (correctCaseBrand) {
+                    (updatedFilters[filterKey] as string[]).push(correctCaseBrand);
+                  } else {
+                    (updatedFilters[filterKey] as string[]).push(value);
+                  }
+                } else {
+                  (updatedFilters[filterKey] as string[]).push(value);
+                }
+              }
+            });
+        }
+      });
+      
+      return updatedFilters;
+    });
   };
 
   const toggleFilter = (type: keyof Omit<FilterState, "price" | "searchQuery">, value: string) => {
@@ -62,7 +111,17 @@ export const FilterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const clearFilters = () => {
-    setFilters(defaultFilters);
+    // Reset to default values - don't use a hardcoded object
+    setFilters({
+      colors: [],
+      sizes: [],
+      materials: [],
+      genders: [],
+      brands: [],
+      subCategories: [],
+      price: [0, 200],
+      searchQuery: "",
+    });
   };
 
   return (

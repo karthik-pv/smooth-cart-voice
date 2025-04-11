@@ -552,21 +552,11 @@ const ProductListingPage = () => {
               </Select>
             </div>
 
-            {/* Active Filters */}
             {activeFilterCount > 0 && (
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                <span className="text-sm font-medium">Active Filters:</span>
+              <div className="flex flex-wrap gap-2 mt-4 mb-6">
                 {selectedFilters.colors.map((color) => (
-                  <Badge
-                    key={`badge-color-${color}`}
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: color }}
-                    />
-                    <span className="capitalize">{color}</span>
+                  <Badge key={`color-${color}`} variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">{color}</span>
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => toggleFilter("colors", color)}
@@ -574,39 +564,55 @@ const ProductListingPage = () => {
                   </Badge>
                 ))}
                 {selectedFilters.sizes.map((size) => (
-                  <Badge
-                    key={`badge-size-${size}`}
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    Size: {size}
+                  <Badge key={`size-${size}`} variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">Size: {size}</span>
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => toggleFilter("sizes", size)}
                     />
                   </Badge>
                 ))}
+                {selectedFilters.materials.map((material) => (
+                  <Badge key={`material-${material}`} variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">{material}</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => toggleFilter("materials", material)}
+                    />
+                  </Badge>
+                ))}
+                {selectedFilters.genders.map((gender) => (
+                  <Badge key={`gender-${gender}`} variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">{gender}</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => toggleFilter("genders", gender)}
+                    />
+                  </Badge>
+                ))}
                 {selectedFilters.brands.map((brand) => (
-                  <Badge
-                    key={`badge-brand-${brand}`}
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    {brand}
+                  <Badge key={`brand-${brand}`} variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">{brand}</span>
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => toggleFilter("brands", brand)}
                     />
                   </Badge>
                 ))}
-                // Fix the price filter badge removal
-                {(selectedFilters.price[0] > 0 ||
-                  selectedFilters.price[1] < 200) && (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    ${selectedFilters.price[0]} - ${selectedFilters.price[1]}
+                {selectedFilters.subCategories.map((category) => (
+                  <Badge key={`category-${category}`} variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">{category}</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => toggleFilter("subCategories", category)}
+                    />
+                  </Badge>
+                ))}
+                {(selectedFilters.price[0] > 0 || selectedFilters.price[1] < 200) && (
+                  <Badge variant="secondary" className="px-3 py-1">
+                    <span className="mr-1">
+                      ${selectedFilters.price[0]} - ${selectedFilters.price[1]}
+                    </span>
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => setPriceRange([0, 200])}
@@ -617,58 +623,60 @@ const ProductListingPage = () => {
             )}
 
             {/* Product Grid */}
-            {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProducts.map((product) => (
-                  <Link
-                    key={product.id}
-                    to={`/product/${product.id}`}
-                    className="product-card group"
-                  >
-                    <div className="relative aspect-square overflow-hidden bg-gray-100">
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                      {product.isNew && (
-                        <div className="absolute top-2 right-2 bg-primary text-white text-xs px-2 py-1 rounded-full">
-                          New
-                        </div>
-                      )}
-                      {product.isBestSeller && (
-                        <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full">
-                          Best Seller
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <div className="flex justify-between mb-1">
-                        <h3 className="font-medium">{product.name}</h3>
-                        <p className="font-bold">${product.price.toFixed(2)}</p>
+            <div className="mt-8">
+              {filteredProducts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredProducts.map((product) => (
+                    <Link
+                      key={product.id}
+                      to={`/product/${product.id}`}
+                      className="product-card group"
+                    >
+                      <div className="relative aspect-square overflow-hidden bg-gray-100">
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        {product.isNew && (
+                          <div className="absolute top-2 right-2 bg-primary text-white text-xs px-2 py-1 rounded-full">
+                            New
+                          </div>
+                        )}
+                        {product.isBestSeller && (
+                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full">
+                            Best Seller
+                          </div>
+                        )}
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <p className="text-gray-500 capitalize">
-                          {product.brand}
-                        </p>
-                        <div className="flex items-center">
-                          <span className="mr-1">★</span>
-                          <span>{product.rating}</span>
+                      <div className="p-4">
+                        <div className="flex justify-between mb-1">
+                          <h3 className="font-medium">{product.name}</h3>
+                          <p className="font-bold">${product.price.toFixed(2)}</p>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <p className="text-gray-500 capitalize">
+                            {product.brand}
+                          </p>
+                          <div className="flex items-center">
+                            <span className="mr-1">★</span>
+                            <span>{product.rating}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-xl mb-4">No products found</p>
-                <p className="text-gray-600 mb-6">
-                  Try adjusting your filters or search term
-                </p>
-                <Button onClick={clearFilters}>Clear All Filters</Button>
-              </div>
-            )}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-xl mb-4">No products found</p>
+                  <p className="text-gray-600 mb-6">
+                    Try adjusting your filters or search term
+                  </p>
+                  <Button onClick={clearFilters}>Clear All Filters</Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
