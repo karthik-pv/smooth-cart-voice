@@ -1,18 +1,24 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { products } from "@/data/products"; // Make sure we import products
+import { products } from "@/data/products";
+import { prompts } from "@/lib/prompts";
+import { useFilters, FilterState } from "@/context/FilterContext";
+import { filterOptions } from "@/data/products";
+import { useProduct } from "@/context/ProductContext";
+import { useUserInfo } from "@/hooks/useUserInfo";
 
 // Initialize Gemini with Vite environment variable
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
-// Define available functions for Gemini
-// Add these imports
-import { useFilters, FilterState } from "@/context/FilterContext";
-import { filterOptions } from "@/data/products";
-import { useProduct } from "@/context/ProductContext"; // Add this import
-
 // Add this to the availableFunctions object
+interface UserInfo {
+  name: string;
+  email: string;
+  address: string;
+  phone: string;
+}
+
 const availableFunctions = {
   showGymClothes: {
     name: "showGymClothes",
@@ -68,9 +74,9 @@ const availableFunctions = {
 };
 
 export const VoiceListener = () => {
-  // Add this near the top of the component
+  const { updateUserInfo } = useUserInfo();
   const { updateFilters, clearFilters } = useFilters();
-  const { setSelectedSize, setQuantity } = useProduct(); // Add this line to get the context functions
+  const { setSelectedSize, setQuantity } = useProduct();
 
   const [transcript, setTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -196,17 +202,7 @@ export const VoiceListener = () => {
   const handleClearFilters = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      const prompt = `
-        You are a shopping assistant that helps users with filtering products.
-        Analyze this voice command and determine if the user wants to clear or reset all filters.
-        
-        User command: "${transcript}"
-        
-        Return ONLY "yes" if the user wants to clear/reset filters, or "no" if not.
-        Examples of clear filter commands: "clear filters", "reset filters", "remove all filters", "start over with filters", etc.
-      `;
-
+      const prompt = prompts.clearFilters.replace("{transcript}", transcript);
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim().toLowerCase();
 
@@ -306,6 +302,12 @@ export const VoiceListener = () => {
 
     // Set the last action to show feedback to the user
     setLastAction(`Processing: "${command}"`);
+
+    // Add this near the start of handleVoiceCommand
+    const isUserInfoUpdate = await handleUserInfoUpdate(command);
+    if (isUserInfoUpdate) {
+      return;
+    }
 
     const isCartNavigation = await handleCartNavigation(command);
     if (isCartNavigation) {
@@ -537,29 +539,10 @@ export const VoiceListener = () => {
   const handleCategoryNavigation = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      const prompt = `
-      You are a shopping assistant for a sports apparel website.
-      Analyze this voice command and determine if the user is interested in one of our main product categories.
-      
-      User command: "${transcript}"
-      
-      Main categories:
-      - "gym": Anything related to gym, fitness, weightlifting, strength training, bodybuilding, workout equipment, gym clothes, etc.
-      - "yoga": Anything related to yoga, meditation, stretching, flexibility, yoga mats, yoga clothes, etc.
-      - "running": Anything related to running, jogging, marathons, sprinting, track, trail running, running shoes, running clothes, etc.
-      
-      IMPORTANT INSTRUCTIONS:
-      1. If the user mentions ANY term related to running, marathons, jogging, or similar activities, return "running".
-      2. If the user mentions ANY term related to yoga, meditation, or similar activities, return "yoga".
-      3. If the user mentions ANY term related to gym, fitness, weightlifting, or similar activities, return "gym".
-      4. If the user's request is about applying filters to products and NOT about a specific category, return "none".
-      5. If the user's request is not related to any specific category, return "none".
-      
-      Return ONLY one of these values: "gym", "yoga", "running", or "none".
-      Do not include any other text in your response.
-    `;
-
+      const prompt = prompts.categoryNavigation.replace(
+        "{transcript}",
+        transcript
+      );
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim().toLowerCase();
 
@@ -742,6 +725,50 @@ export const VoiceListener = () => {
     }
   };
 
+  const handleUserInfoUpdate = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = prompts.userInfo.replace("{transcript}", transcript);
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text();
+      const updatedResponse = response
+        .replace("```json", "")
+        .replace("```", "");
+      try {
+        const parsedInfo = JSON.parse(updatedResponse.trim());
+        console.log("Parsed user info:", parsedInfo);
+
+        // Only update if we actually got some information
+        if (Object.keys(parsedInfo).length > 0) {
+          // Clean up the data before storing
+          const cleanedInfo: Partial<UserInfo> = {};
+
+          if (parsedInfo.name) cleanedInfo.name = parsedInfo.name.trim();
+          if (parsedInfo.email)
+            cleanedInfo.email = parsedInfo.email.trim().toLowerCase();
+          if (parsedInfo.address)
+            cleanedInfo.address = parsedInfo.address.trim();
+          if (parsedInfo.phone) cleanedInfo.phone = parsedInfo.phone.trim();
+
+          // Update the local storage
+          updateUserInfo(cleanedInfo);
+
+          // Set feedback message
+          const updatedFields = Object.keys(cleanedInfo).join(", ");
+          setLastAction(`Updated user information: ${updatedFields}`);
+          console.log("Updated user info:", cleanedInfo);
+          return true;
+        }
+      } catch (error) {
+        console.error("Error parsing user info:", error);
+      }
+      return false;
+    } catch (error) {
+      console.error("User info update error:", error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     startListening();
 
@@ -755,3 +782,5 @@ export const VoiceListener = () => {
 
   return null;
 };
+
+// Add this new function after the other handler functions
