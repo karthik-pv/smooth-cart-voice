@@ -12,11 +12,16 @@ import { useUserInfo } from "@/hooks/useUserInfo";
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
 // Add this to the availableFunctions object
+// Update UserInfo interface to include credit card details
 interface UserInfo {
   name: string;
   email: string;
   address: string;
   phone: string;
+  cardName?: string;
+  cardNumber?: string;
+  expiryDate?: string;
+  cvv?: string;
 }
 
 const availableFunctions = {
@@ -74,7 +79,7 @@ const availableFunctions = {
 };
 
 export const VoiceListener = () => {
-  const { updateUserInfo } = useUserInfo();
+  const { updateUserInfo, getUserInfo } = useUserInfo();
   const { updateFilters, clearFilters } = useFilters();
   const { setSelectedSize, setQuantity } = useProduct();
 
@@ -147,7 +152,48 @@ export const VoiceListener = () => {
       }
     }
   };
+  const handleCreditCardUpdate = async (command: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `
+        Analyze this voice command for credit card information.
+        Command: "${command}"
+        
+        Extract these fields if present:
+        1. Card number (16 digits)
+        2. Expiry date (MM/YY format)
+        3. CVV (3 digits)
+        4. Name on card
+        
+        Return JSON format only, with null for missing fields:
+        {
+          "cardName": string or null,
+          "cardNumber": string or null,
+          "expiryDate": string or null,
+          "cvv": string or null
+        }
+      `;
 
+      const result = await model.generateContent(prompt);
+      const response = JSON.parse(await result.response.text());
+
+      if (Object.values(response).some((value) => value !== null)) {
+        const currentInfo = getUserInfo();
+        const updatedInfo = {
+          ...currentInfo,
+          ...response,
+        };
+        updateUserInfo(updatedInfo);
+        window.dispatchEvent(new Event("userInfoUpdated"));
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Credit card update error:", error);
+      return false;
+    }
+  };
   // Update the interpretCommand function to better detect clearFilters intent
   const interpretCommand = async (transcript: string) => {
     try {
@@ -725,46 +771,98 @@ export const VoiceListener = () => {
     }
   };
 
+  // Update the handleUserInfoUpdate function to handle credit card information
   const handleUserInfoUpdate = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = prompts.userInfo.replace("{transcript}", transcript);
+
+      const prompt = `
+        You are a shopping assistant that helps users update their personal information.
+        Analyze the following voice command and determine if the user is trying to update their personal information.
+        
+        User command: "${transcript}"
+  
+        If the user is trying to update any of the following information, extract the values:
+        - name
+        - email
+        - address
+        - phone
+        - credit card number (format: XXXX XXXX XXXX XXXX)
+        - card expiry date (format: MM/YY)
+        - CVV (3-4 digit security code)
+  
+        Return a JSON object with the extracted information, or an empty object if no information is being updated.
+        Format:
+        {
+          "isUserInfoUpdate": true/false,
+          "name": "extracted name or null",
+          "email": "extracted email or null",
+          "address": "extracted address or null",
+          "phone": "extracted phone or null",
+          "cardNumber": "extracted card number or null",
+          "expiryDate": "extracted expiry date or null",
+          "cvv": "extracted CVV or null"
+        }
+      `;
+
       const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      const updatedResponse = response
+      const responseText = await result.response.text();
+      const cleanedResponse = responseText
         .replace("```json", "")
         .replace("```", "");
+
       try {
-        const parsedInfo = JSON.parse(updatedResponse.trim());
-        console.log("Parsed user info:", parsedInfo);
+        const response = JSON.parse(cleanedResponse);
 
-        // Only update if we actually got some information
-        if (Object.keys(parsedInfo).length > 0) {
-          // Clean up the data before storing
-          const cleanedInfo: Partial<UserInfo> = {};
+        if (response.isUserInfoUpdate) {
+          // Get current user info using the hook's function
+          const { getUserInfo } = useUserInfo(); // Add this line
+          const currentInfo = getUserInfo(); // Now this will work
 
-          if (parsedInfo.name) cleanedInfo.name = parsedInfo.name.trim();
-          if (parsedInfo.email)
-            cleanedInfo.email = parsedInfo.email.trim().toLowerCase();
-          if (parsedInfo.address)
-            cleanedInfo.address = parsedInfo.address.trim();
-          if (parsedInfo.phone) cleanedInfo.phone = parsedInfo.phone.trim();
+          // Update with new information
+          const updatedInfo: UserInfo = { ...currentInfo };
 
-          // Update the local storage
-          updateUserInfo(cleanedInfo);
+          if (response.name) updatedInfo.name = response.name;
+          if (response.email) updatedInfo.email = response.email;
+          if (response.address) updatedInfo.address = response.address;
+          if (response.phone) updatedInfo.phone = response.phone;
 
-          // Set feedback message
-          const updatedFields = Object.keys(cleanedInfo).join(", ");
-          setLastAction(`Updated user information: ${updatedFields}`);
-          console.log("Updated user info:", cleanedInfo);
+          // Add credit card information
+          if (response.cardNumber) updatedInfo.cardNumber = response.cardNumber;
+          if (response.expiryDate) updatedInfo.expiryDate = response.expiryDate;
+          if (response.cvv) updatedInfo.cvv = response.cvv;
+
+          // Update user info
+          updateUserInfo(updatedInfo);
+
+          // Create a feedback message
+          let feedbackMessage = "Updated your ";
+          const updatedFields = [];
+
+          if (response.name) updatedFields.push("name");
+          if (response.email) updatedFields.push("email");
+          if (response.address) updatedFields.push("address");
+          if (response.phone) updatedFields.push("phone");
+          if (response.cardNumber) updatedFields.push("card number");
+          if (response.expiryDate) updatedFields.push("card expiry date");
+          if (response.cvv) updatedFields.push("CVV");
+
+          feedbackMessage += updatedFields.join(", ");
+
+          // Dispatch a custom event to notify other components
+          window.dispatchEvent(new Event("userInfoUpdated"));
+
+          setLastAction(feedbackMessage);
           return true;
         }
-      } catch (error) {
-        console.error("Error parsing user info:", error);
+
+        return false;
+      } catch (parseError) {
+        console.error("Error parsing JSON response:", parseError);
+        return false;
       }
-      return false;
     } catch (error) {
-      console.error("User info update error:", error);
+      console.error("Error in handleUserInfoUpdate:", error);
       return false;
     }
   };
@@ -782,3 +880,8 @@ export const VoiceListener = () => {
 
   return null;
 };
+
+// Add this function after handleUserInfoUpdate
+// Add the handleCreditCardUpdate function
+
+// Update handleVoiceCommand to include credit card handling

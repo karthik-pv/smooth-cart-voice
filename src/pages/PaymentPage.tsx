@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { useCart } from "@/context/CartContext";
@@ -6,13 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -22,16 +15,72 @@ import {
   GooglePayIcon,
 } from "@/components/PaymentIcons";
 import { ShoppingBag, ArrowRight, Lock } from "lucide-react";
-import { motion } from "framer-motion";
-import { useEffect } from "react";
 import { useUserInfo } from "@/hooks/useUserInfo";
 
 const PaymentPage = () => {
   const { items, subtotal, clearCart } = useCart();
   const navigate = useNavigate();
+  const { getUserInfo, updateUserInfo } = useUserInfo();
 
   const [paymentMethod, setPaymentMethod] = useState("credit-card");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    address: "",
+    phone: "",
+    cardName: "",
+    cardNumber: "",
+    expiryDate: "",
+    cvv: "",
+  });
+
+  useEffect(() => {
+    const userInfo = getUserInfo();
+    setFormData(prev => ({
+      ...prev,
+      name: userInfo.name || '',
+      email: userInfo.email || '',
+      address: userInfo.address || '',
+      phone: userInfo.phone || '',
+      cardName: userInfo.cardName || '',
+      cardNumber: userInfo.cardNumber || '',
+      expiryDate: userInfo.expiryDate || '',
+      cvv: userInfo.cvv || '',
+    }));
+
+    const handleStorageChange = () => {
+      const updatedInfo = getUserInfo();
+      setFormData(prev => ({
+        ...prev,
+        name: updatedInfo.name || '',
+        email: updatedInfo.email || '',
+        address: updatedInfo.address || '',
+        phone: updatedInfo.phone || '',
+        cardName: updatedInfo.cardName || '',
+        cardNumber: updatedInfo.cardNumber || '',
+        expiryDate: updatedInfo.expiryDate || '',
+        cvv: updatedInfo.cvv || '',
+      }));
+    };
+
+    window.addEventListener("userInfoUpdated", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("userInfoUpdated", handleStorageChange);
+    };
+  }, [getUserInfo]);
+
+  const handleFormChange = (field: keyof typeof formData) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const newValue = e.target.value;
+    setFormData((prev) => {
+      const newData = { ...prev, [field]: newValue };
+      updateUserInfo(newData);
+      return newData;
+    });
+  };
 
   const shippingCost = subtotal > 50 ? 0 : 5.99;
   const tax = subtotal * 0.07; // 7% tax
@@ -48,48 +97,6 @@ const PaymentPage = () => {
     }, 2000);
   };
 
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    address: '',
-    phone: ''
-  });
-
-  const { getUserInfo, updateUserInfo } = useUserInfo();
-
-  // Update this useEffect to watch for localStorage changes
-  useEffect(() => {
-    // Initial load
-    const userInfo = getUserInfo();
-    setFormData(userInfo);
-
-    // Create a storage event listener
-    const handleStorageChange = () => {
-      const updatedInfo = getUserInfo();
-      setFormData(updatedInfo);
-    };
-
-    // Add event listener
-    window.addEventListener('storage', handleStorageChange);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [getUserInfo]);
-
-  // Update the form change handlers to sync with localStorage
-  const handleFormChange = (field: keyof typeof formData) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const newValue = e.target.value;
-    setFormData(prev => {
-      const newData = { ...prev, [field]: newValue };
-      updateUserInfo(newData);
-      return newData;
-    });
-  };
-
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
@@ -100,22 +107,17 @@ const PaymentPage = () => {
 
         <div className="lg:grid lg:grid-cols-3 lg:gap-12">
           <div className="lg:col-span-2">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="mb-8"
-            >
+            <div className="mb-8">
               <h2 className="text-xl font-bold mb-4">Shipping Information</h2>
 
               <form className="space-y-4 mb-8">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="John Doe" 
+                  <Input
+                    id="name"
+                    placeholder="John Doe"
                     value={formData.name}
-                    onChange={handleFormChange('name')}
+                    onChange={handleFormChange("name")}
                   />
                 </div>
 
@@ -126,7 +128,7 @@ const PaymentPage = () => {
                     type="email"
                     placeholder="john.doe@example.com"
                     value={formData.email}
-                    onChange={handleFormChange('email')}
+                    onChange={handleFormChange("email")}
                   />
                 </div>
 
@@ -136,17 +138,17 @@ const PaymentPage = () => {
                     id="address"
                     placeholder="123 Main St, San Francisco, CA 94103"
                     value={formData.address}
-                    onChange={handleFormChange('address')}
+                    onChange={handleFormChange("address")}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input 
-                    id="phone" 
-                    placeholder="(123) 456-7890" 
+                  <Input
+                    id="phone"
+                    placeholder="(123) 456-7890"
                     value={formData.phone}
-                    onChange={handleFormChange('phone')}
+                    onChange={handleFormChange("phone")}
                   />
                 </div>
 
@@ -163,13 +165,8 @@ const PaymentPage = () => {
 
               <Separator className="my-8" />
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-              >
+              <div className="payment-method-section">
                 <h2 className="text-xl font-bold mb-4">Payment Method</h2>
-
                 <Tabs
                   value={paymentMethod}
                   onValueChange={setPaymentMethod}
@@ -210,7 +207,12 @@ const PaymentPage = () => {
                     <form className="space-y-4" onSubmit={handlePayment}>
                       <div className="space-y-2">
                         <Label htmlFor="cardName">Name on Card</Label>
-                        <Input id="cardName" placeholder="John Doe" />
+                        <Input 
+                          id="cardName"
+                          placeholder="John Doe"
+                          value={formData.cardName}
+                          onChange={handleFormChange('cardName')}
+                        />
                       </div>
 
                       <div className="space-y-2">
@@ -218,18 +220,30 @@ const PaymentPage = () => {
                         <Input
                           id="cardNumber"
                           placeholder="1234 5678 9012 3456"
+                          value={formData.cardNumber}
+                          onChange={handleFormChange('cardNumber')}
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="expiryDate">Expiry Date</Label>
-                          <Input id="expiryDate" placeholder="MM/YY" />
+                          <Input 
+                            id="expiryDate" 
+                            placeholder="MM/YY"
+                            value={formData.expiryDate}
+                            onChange={handleFormChange('expiryDate')}
+                          />
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="cvv">CVV</Label>
-                          <Input id="cvv" placeholder="123" />
+                          <Input 
+                            id="cvv" 
+                            placeholder="123"
+                            value={formData.cvv}
+                            onChange={handleFormChange('cvv')}
+                          />
                         </div>
                       </div>
 
@@ -239,31 +253,25 @@ const PaymentPage = () => {
                           htmlFor="save-card"
                           className="text-sm font-medium leading-none cursor-pointer"
                         >
-                          Save this card for future purchases
+                          Save card for future purchases
                         </label>
                       </div>
 
-                      <div className="pt-4">
-                        <Button
-                          type="submit"
-                          className="w-full"
-                          disabled={isProcessing}
-                        >
-                          {isProcessing ? (
-                            <>Processing...</>
-                          ) : (
-                            <>
-                              Complete Purchase{" "}
-                              <ArrowRight className="ml-2 h-4 w-4" />
-                            </>
-                          )}
-                        </Button>
-                      </div>
-
-                      <div className="text-center text-xs text-gray-500 flex items-center justify-center mt-2">
-                        <Lock className="h-3 w-3 mr-1" />
-                        Secure payment processing
-                      </div>
+                      <Button 
+                        type="submit" 
+                        className="w-full mt-4"
+                        disabled={isProcessing}
+                      >
+                        {isProcessing ? (
+                          <span className="flex items-center">
+                            Processing... <Lock className="ml-2 h-4 w-4 animate-pulse" />
+                          </span>
+                        ) : (
+                          <span className="flex items-center">
+                            Complete Purchase <ArrowRight className="ml-2 h-4 w-4" />
+                          </span>
+                        )}
+                      </Button>
                     </form>
                   </TabsContent>
 
@@ -318,17 +326,12 @@ const PaymentPage = () => {
                     </div>
                   </TabsContent>
                 </Tabs>
-              </motion.div>
-            </motion.div>
+              </div>
+            </div>
           </div>
 
           <div className="lg:col-span-1">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="sticky top-24 rounded-lg border p-6 bg-background"
-            >
+            <div className="sticky top-24 rounded-lg border p-6 bg-background">
               <h2 className="text-lg font-bold mb-4 flex items-center">
                 <ShoppingBag className="h-5 w-5 mr-2" />
                 Order Summary
@@ -393,7 +396,7 @@ const PaymentPage = () => {
                 <span>Total</span>
                 <span>${total.toFixed(2)}</span>
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>
