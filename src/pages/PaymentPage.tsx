@@ -14,8 +14,9 @@ import {
   AppleIcon,
   GooglePayIcon,
 } from "@/components/PaymentIcons";
-import { ShoppingBag, ArrowRight, Lock } from "lucide-react";
+import { ShoppingBag, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useUserInfo } from "@/hooks/useUserInfo";
+import { toast } from "@/components/ui/use-toast";
 
 const PaymentPage = () => {
   const { items, subtotal, clearCart } = useCart();
@@ -24,6 +25,7 @@ const PaymentPage = () => {
 
   const [paymentMethod, setPaymentMethod] = useState("credit-card");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [highlightedFields, setHighlightedFields] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -37,33 +39,55 @@ const PaymentPage = () => {
 
   useEffect(() => {
     const userInfo = getUserInfo();
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      name: userInfo.name || '',
-      email: userInfo.email || '',
-      address: userInfo.address || '',
-      phone: userInfo.phone || '',
-      cardName: userInfo.cardName || '',
-      cardNumber: userInfo.cardNumber || '',
-      expiryDate: userInfo.expiryDate || '',
-      cvv: userInfo.cvv || '',
+      name: userInfo.name || "",
+      email: userInfo.email || "",
+      address: userInfo.address || "",
+      phone: userInfo.phone || "",
+      cardName: userInfo.cardName || "",
+      cardNumber: userInfo.cardNumber || "",
+      expiryDate: userInfo.expiryDate || "",
+      cvv: userInfo.cvv || "",
     }));
 
-    const handleStorageChange = () => {
+    const handleStorageChange = (event: Event) => {
       const updatedInfo = getUserInfo();
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        name: updatedInfo.name || '',
-        email: updatedInfo.email || '',
-        address: updatedInfo.address || '',
-        phone: updatedInfo.phone || '',
-        cardName: updatedInfo.cardName || '',
-        cardNumber: updatedInfo.cardNumber || '',
-        expiryDate: updatedInfo.expiryDate || '',
-        cvv: updatedInfo.cvv || '',
+        name: updatedInfo.name || "",
+        email: updatedInfo.email || "",
+        address: updatedInfo.address || "",
+        phone: updatedInfo.phone || "",
+        cardName: updatedInfo.cardName || "",
+        cardNumber: updatedInfo.cardNumber || "",
+        expiryDate: updatedInfo.expiryDate || "",
+        cvv: updatedInfo.cvv || "",
       }));
+
+      // Handle custom event with detail
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail) {
+        // Show toast notification
+        toast({
+          title: "Information Updated",
+          description:
+            customEvent.detail.message || "Your information has been updated",
+          variant: "default",
+        });
+
+        // Highlight updated fields
+        if (customEvent.detail.updatedFields) {
+          setHighlightedFields(customEvent.detail.updatedFields);
+          // Remove highlight after 3 seconds
+          setTimeout(() => {
+            setHighlightedFields([]);
+          }, 3000);
+        }
+      }
     };
 
+    // Listen for userInfoUpdated event only (both personal and credit card info are now handled by this event)
     window.addEventListener("userInfoUpdated", handleStorageChange);
 
     return () => {
@@ -71,15 +95,20 @@ const PaymentPage = () => {
     };
   }, [getUserInfo]);
 
-  const handleFormChange = (field: keyof typeof formData) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const newValue = e.target.value;
-    setFormData((prev) => {
-      const newData = { ...prev, [field]: newValue };
-      updateUserInfo(newData);
-      return newData;
-    });
+  const handleFormChange =
+    (field: keyof typeof formData) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      setFormData((prev) => {
+        const newData = { ...prev, [field]: newValue };
+        updateUserInfo(newData);
+        return newData;
+      });
+    };
+
+  // Function to determine if a field is highlighted
+  const isFieldHighlighted = (fieldName: string) => {
+    return highlightedFields.some((field) => field.includes(fieldName));
   };
 
   const shippingCost = subtotal > 50 ? 0 : 5.99;
@@ -118,7 +147,18 @@ const PaymentPage = () => {
                     placeholder="John Doe"
                     value={formData.name}
                     onChange={handleFormChange("name")}
+                    className={
+                      isFieldHighlighted("name")
+                        ? "ring-2 ring-green-500 focus:ring-green-500"
+                        : ""
+                    }
                   />
+                  {isFieldHighlighted("name") && (
+                    <div className="text-green-600 text-xs mt-1 flex items-center">
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Updated by voice
+                      command
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -129,7 +169,18 @@ const PaymentPage = () => {
                     placeholder="john.doe@example.com"
                     value={formData.email}
                     onChange={handleFormChange("email")}
+                    className={
+                      isFieldHighlighted("email")
+                        ? "ring-2 ring-green-500 focus:ring-green-500"
+                        : ""
+                    }
                   />
+                  {isFieldHighlighted("email") && (
+                    <div className="text-green-600 text-xs mt-1 flex items-center">
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Updated by voice
+                      command
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -139,7 +190,18 @@ const PaymentPage = () => {
                     placeholder="123 Main St, San Francisco, CA 94103"
                     value={formData.address}
                     onChange={handleFormChange("address")}
+                    className={
+                      isFieldHighlighted("address")
+                        ? "ring-2 ring-green-500 focus:ring-green-500"
+                        : ""
+                    }
                   />
+                  {isFieldHighlighted("address") && (
+                    <div className="text-green-600 text-xs mt-1 flex items-center">
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Updated by voice
+                      command
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -149,7 +211,18 @@ const PaymentPage = () => {
                     placeholder="(123) 456-7890"
                     value={formData.phone}
                     onChange={handleFormChange("phone")}
+                    className={
+                      isFieldHighlighted("phone")
+                        ? "ring-2 ring-green-500 focus:ring-green-500"
+                        : ""
+                    }
                   />
+                  {isFieldHighlighted("phone") && (
+                    <div className="text-green-600 text-xs mt-1 flex items-center">
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Updated by voice
+                      command
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -207,12 +280,23 @@ const PaymentPage = () => {
                     <form className="space-y-4" onSubmit={handlePayment}>
                       <div className="space-y-2">
                         <Label htmlFor="cardName">Name on Card</Label>
-                        <Input 
+                        <Input
                           id="cardName"
                           placeholder="John Doe"
                           value={formData.cardName}
-                          onChange={handleFormChange('cardName')}
+                          onChange={handleFormChange("cardName")}
+                          className={
+                            isFieldHighlighted("card name")
+                              ? "ring-2 ring-green-500 focus:ring-green-500"
+                              : ""
+                          }
                         />
+                        {isFieldHighlighted("card name") && (
+                          <div className="text-green-600 text-xs mt-1 flex items-center">
+                            <CheckCircle2 className="h-3 w-3 mr-1" /> Updated by
+                            voice command
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -221,29 +305,62 @@ const PaymentPage = () => {
                           id="cardNumber"
                           placeholder="1234 5678 9012 3456"
                           value={formData.cardNumber}
-                          onChange={handleFormChange('cardNumber')}
+                          onChange={handleFormChange("cardNumber")}
+                          className={
+                            isFieldHighlighted("card number")
+                              ? "ring-2 ring-green-500 focus:ring-green-500"
+                              : ""
+                          }
                         />
+                        {isFieldHighlighted("card number") && (
+                          <div className="text-green-600 text-xs mt-1 flex items-center">
+                            <CheckCircle2 className="h-3 w-3 mr-1" /> Updated by
+                            voice command
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="expiryDate">Expiry Date</Label>
-                          <Input 
-                            id="expiryDate" 
+                          <Input
+                            id="expiryDate"
                             placeholder="MM/YY"
                             value={formData.expiryDate}
-                            onChange={handleFormChange('expiryDate')}
+                            onChange={handleFormChange("expiryDate")}
+                            className={
+                              isFieldHighlighted("card expiry date")
+                                ? "ring-2 ring-green-500 focus:ring-green-500"
+                                : ""
+                            }
                           />
+                          {isFieldHighlighted("card expiry date") && (
+                            <div className="text-green-600 text-xs mt-1 flex items-center">
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Updated
+                              by voice command
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="cvv">CVV</Label>
-                          <Input 
-                            id="cvv" 
+                          <Input
+                            id="cvv"
                             placeholder="123"
                             value={formData.cvv}
-                            onChange={handleFormChange('cvv')}
+                            onChange={handleFormChange("cvv")}
+                            className={
+                              isFieldHighlighted("CVV")
+                                ? "ring-2 ring-green-500 focus:ring-green-500"
+                                : ""
+                            }
                           />
+                          {isFieldHighlighted("CVV") && (
+                            <div className="text-green-600 text-xs mt-1 flex items-center">
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Updated
+                              by voice command
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -257,18 +374,19 @@ const PaymentPage = () => {
                         </label>
                       </div>
 
-                      <Button 
-                        type="submit" 
+                      <Button
+                        type="submit"
                         className="w-full mt-4"
                         disabled={isProcessing}
                       >
                         {isProcessing ? (
                           <span className="flex items-center">
-                            Processing... <Lock className="ml-2 h-4 w-4 animate-pulse" />
+                            Processing...
                           </span>
                         ) : (
                           <span className="flex items-center">
-                            Complete Purchase <ArrowRight className="ml-2 h-4 w-4" />
+                            Complete Purchase{" "}
+                            <ArrowRight className="ml-2 h-4 w-4" />
                           </span>
                         )}
                       </Button>
@@ -287,7 +405,13 @@ const PaymentPage = () => {
                         onClick={handlePayment}
                         disabled={isProcessing}
                       >
-                        {isProcessing ? "Processing..." : "Pay with PayPal"}
+                        {isProcessing ? (
+                          <span className="flex items-center">
+                            Processing...
+                          </span>
+                        ) : (
+                          "Pay with PayPal"
+                        )}
                       </Button>
                     </div>
                   </TabsContent>
@@ -304,7 +428,13 @@ const PaymentPage = () => {
                         onClick={handlePayment}
                         disabled={isProcessing}
                       >
-                        {isProcessing ? "Processing..." : "Pay with Apple Pay"}
+                        {isProcessing ? (
+                          <span className="flex items-center">
+                            Processing...
+                          </span>
+                        ) : (
+                          "Pay with Apple Pay"
+                        )}
                       </Button>
                     </div>
                   </TabsContent>
@@ -321,7 +451,13 @@ const PaymentPage = () => {
                         onClick={handlePayment}
                         disabled={isProcessing}
                       >
-                        {isProcessing ? "Processing..." : "Pay with Google Pay"}
+                        {isProcessing ? (
+                          <span className="flex items-center">
+                            Processing...
+                          </span>
+                        ) : (
+                          "Pay with Google Pay"
+                        )}
                       </Button>
                     </div>
                   </TabsContent>
