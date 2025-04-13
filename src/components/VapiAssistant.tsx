@@ -103,8 +103,8 @@ export const VapiAssistant = ({ config }: VapiProps) => {
       return;
     }
 
-    const ASSISTANT_ID = "2da73376-dfd6-4be9-a9f7-9436017c0840";
-    const API_KEY = "feb971be-64a5-40b9-bc66-cf6d9c6ef341";
+    const ASSISTANT_ID = "3b7a6702-da18-4392-b543-0859f4a80fb7";
+    const API_KEY = "4b8bc1b3-6fcf-434a-b135-ab9557ac1fab";
 
     const buttonConfig: VapiConfig = {
       position: "bottom-right", // Always bottom right
