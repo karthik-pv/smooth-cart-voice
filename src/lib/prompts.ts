@@ -406,7 +406,7 @@ export const prompts = {
     3. "user_info" - User is providing or updating personal/payment information
        Examples: "my name is John", "my email is...", "my card number is...", "update my address"
     
-    4. "cart" - User wants to view or manage their shopping cart
+    4. "cart" - User wants to view or manage their shopping cart.....is you her show me my card or take me to the carpet page......even then its this function
        Examples: "show me my cart", "view cart", "what's in my cart"
     
     5. "product_action" - User wants to interact with a current product (add to cart, change size/quantity)
