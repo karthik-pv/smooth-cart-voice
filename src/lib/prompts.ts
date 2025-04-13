@@ -55,6 +55,7 @@ export const prompts = {
     {availableFunctions}
 
     Return ONLY the function name that best matches the user's intent, or "unknown" if no function matches.
+    If the user says "show me my card" , or "take me to the card page" or "take me to the carpet page" , he is probably asking to show him his cart.......consider that.
     IMPORTANT: If the user is asking to clear, reset, or remove filters in ANY way, you MUST return "clearFilters".
     Do not include any other text in your response.
   `,
