@@ -12,11 +12,16 @@ import { useUserInfo } from "@/hooks/useUserInfo";
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
 // Add this to the availableFunctions object
+// Update UserInfo interface to include credit card details
 interface UserInfo {
   name: string;
   email: string;
   address: string;
   phone: string;
+  cardName?: string;
+  cardNumber?: string;
+  expiryDate?: string;
+  cvv?: string;
 }
 
 const availableFunctions = {
@@ -74,15 +79,60 @@ const availableFunctions = {
 };
 
 export const VoiceListener = () => {
-  const { updateUserInfo } = useUserInfo();
-  const { updateFilters, clearFilters } = useFilters();
+  const { updateUserInfo, getUserInfo } = useUserInfo();
+  const { updateFilters, clearFilters, removeFilter } = useFilters();
   const { setSelectedSize, setQuantity } = useProduct();
 
   const [transcript, setTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [lastAction, setLastAction] = useState<string>("");
+  const [actionLog, setActionLog] = useState<
+    Array<{ timestamp: number; action: string; success: boolean }>
+  >([]);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   const navigate = useNavigate();
   const recognitionRef = useRef<any>(null);
+
+  // Add logging function to track all actions for diagnostics
+  const logAction = (action: string, success: boolean = true) => {
+    console.log(`Voice Action [${success ? "SUCCESS" : "FAILURE"}]: ${action}`);
+
+    // Add to internal log for debugging
+    setActionLog((prevLog) => {
+      const newLog = [
+        { timestamp: Date.now(), action, success },
+        ...prevLog.slice(0, 19), // Keep last 20 actions
+      ];
+      return newLog;
+    });
+
+    // Reset or increment error counter
+    if (success) {
+      setConsecutiveErrors(0);
+    } else {
+      setConsecutiveErrors((prev) => prev + 1);
+    }
+  };
+
+  // New error recovery function
+  const handleRecovery = () => {
+    // If we have 3+ consecutive errors, try restarting the recognition service
+    if (consecutiveErrors >= 3) {
+      console.log("Multiple errors detected, restarting voice recognition");
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      setIsListening(false);
+      setConsecutiveErrors(0);
+
+      // Delayed restart
+      setTimeout(() => {
+        startListening();
+        setLastAction("Voice assistant restarted after detecting issues");
+      }, 1000);
+    }
+  };
 
   const startListening = () => {
     if ("webkitSpeechRecognition" in window && !isListening) {
@@ -93,6 +143,7 @@ export const VoiceListener = () => {
       recognitionRef.current.onstart = () => {
         setIsListening(true);
         console.log("Voice recognition activated");
+        logAction("Voice recognition started");
       };
 
       recognitionRef.current.onresult = async (event: any) => {
@@ -104,9 +155,19 @@ export const VoiceListener = () => {
           const transcript = result[0].transcript.toLowerCase();
           setTranscript(transcript);
           console.log("Processing command:", transcript);
+          logAction(`Received command: "${transcript}"`);
 
-          // Handle voice commands
-          await handleVoiceCommand(transcript);
+          try {
+            // Handle voice commands
+            await handleVoiceCommand(transcript);
+          } catch (error) {
+            console.error("Error in command handling:", error);
+            logAction(`Failed to process: "${transcript}"`, false);
+            setLastAction(`Error processing: "${transcript}"`);
+
+            // Try recovery if needed
+            handleRecovery();
+          }
         }
 
         // Resume listening after processing
@@ -115,6 +176,7 @@ export const VoiceListener = () => {
 
       recognitionRef.current.onerror = (event: any) => {
         console.error("Error occurred in recognition:", event.error);
+        logAction(`Recognition error: ${event.error}`, false);
 
         if (event.error !== "aborted") {
           setIsListening(false);
@@ -131,6 +193,7 @@ export const VoiceListener = () => {
             recognitionRef.current.start();
           } catch (error) {
             console.error("Restart failed:", error);
+            logAction("Failed to restart recognition", false);
             setIsListening(false);
             recognitionRef.current = null;
             setTimeout(startListening, 300);
@@ -142,59 +205,487 @@ export const VoiceListener = () => {
         recognitionRef.current.start();
       } catch (error) {
         console.error("Failed to start recognition:", error);
+        logAction("Failed to start recognition", false);
         setIsListening(false);
         recognitionRef.current = null;
       }
     }
   };
 
-  // Update the interpretCommand function to better detect clearFilters intent
-  const interpretCommand = async (transcript: string) => {
-    try {
-      // First, directly check for clear filter phrases
-      const clearFilterPhrases = [
-        "clear filter",
-        "reset filter",
-        "remove filter",
-        "clear all filter",
-        "reset all filter",
-        "remove all filter",
-        "clear the filter",
-        "start over",
-      ];
+  // Implement robust two-tier intent classification and handling system
+  const handleVoiceCommand = async (command: string) => {
+    console.log("Processing command:", command);
+    logAction(`Processing command: "${command}"`);
 
-      // Check if the transcript contains any clear filter phrases
-      for (const phrase of clearFilterPhrases) {
-        if (transcript.includes(phrase)) {
-          console.log("Direct match for clear filters detected");
-          return "clearFilters";
+    // Show feedback that we're processing the command
+    setLastAction(`Processing: "${command}"`);
+
+    try {
+      // Record start time for performance tracking
+      const startTime = performance.now();
+
+      // FIRST TIER: Identify the primary intent using the master classifier
+      const primaryIntent = await classifyPrimaryIntent(command);
+      console.log("Primary intent identified:", primaryIntent);
+      logAction(`Identified primary intent: ${primaryIntent}`);
+
+      // Record classification time
+      const classificationTime = performance.now() - startTime;
+      console.log(
+        `Intent classification took ${classificationTime.toFixed(2)}ms`
+      );
+
+      // SECOND TIER: Route to specialized handlers based on primary intent
+      let handled = false;
+      let handlerStartTime = performance.now();
+
+      switch (primaryIntent) {
+        case "navigation":
+          handled = await handleNavigationCommand(command);
+          break;
+
+        case "order_completion":
+          handled = await handleOrderCompletion(command);
+          break;
+
+        case "user_info":
+          handled = await handleUserInfoUpdate(command);
+          break;
+
+        case "cart":
+          handled = await handleCartNavigation(command);
+          if (handled) {
+            setLastAction(`Navigating to cart: "${command}"`);
+          }
+          break;
+
+        case "product_action":
+          handled = await handleProductActions(command);
+          if (handled) {
+            setLastAction(`Product action completed: "${command}"`);
+          }
+          break;
+
+        case "product_navigation":
+          handled = await handleProductDetailNavigation(command);
+          if (handled) {
+            setLastAction(`Navigating to product: "${command}"`);
+          }
+          break;
+
+        case "remove_filter":
+          handled = await handleRemoveFilters(command);
+          break;
+
+        case "category_navigation": {
+          // Special case: handle both category navigation and potential filters in one command
+          const categoryNavigated = await handleCategoryNavigation(command);
+
+          // If we're on a category now, check for filters in the same command
+          if (categoryNavigated) {
+            setLastAction(`Navigating to category based on: "${command}"`);
+
+            // Also check for filters in the same command
+            const filtersApplied = await interpretFilterCommand(command);
+            if (filtersApplied === "filters_updated") {
+              setLastAction(
+                `Navigated to category and applied filters based on: "${command}"`
+              );
+            }
+
+            handled = true;
+          }
+          break;
         }
+
+        case "apply_filter":
+          const filterResult = await interpretFilterCommand(command);
+          if (filterResult === "filters_updated") {
+            setLastAction(`Filters updated based on: "${command}"`);
+            console.log("Filters updated via voice");
+            handled = true;
+          }
+          break;
+
+        case "clear_filters":
+          clearFilters();
+          setLastAction(`All filters cleared based on: "${command}"`);
+          console.log("All filters cleared via dedicated handler");
+          handled = true;
+          break;
+
+        case "general_command":
+          // Fall back to the general command interpreter
+          const action = await interpretCommand(command);
+          console.log("General action interpreted:", action);
+
+          // Handle general commands
+          switch (action) {
+            case "showGymClothes":
+              setLastAction("Navigating to gym products");
+              await navigate("/products/gym");
+              handled = true;
+              break;
+            case "showYogaEquipment":
+              setLastAction("Navigating to yoga products");
+              await navigate("/products/yoga");
+              handled = true;
+              break;
+            case "goToCart":
+              setLastAction("Navigating to cart");
+              await navigate("/cart");
+              handled = true;
+              break;
+            case "checkout":
+              // Updated to use the same logic as handleOrderCompletion
+              const currentPath = window.location.pathname;
+              const isOnPaymentPage = currentPath === "/payment";
+
+              if (isOnPaymentPage) {
+                // Check if the user has provided the necessary payment information
+                const userInfo = getUserInfo();
+                const hasRequiredInfo =
+                  userInfo.cardNumber &&
+                  userInfo.expiryDate &&
+                  userInfo.cvv &&
+                  userInfo.name &&
+                  userInfo.email &&
+                  userInfo.address;
+
+                if (hasRequiredInfo) {
+                  // If on payment page and has required info, complete the order
+                  console.log(
+                    "Completing order and navigating to confirmation page"
+                  );
+                  setLastAction("Completing your order...");
+
+                  // Simulate a button click to submit the form
+                  const submitButton = document.querySelector(
+                    'button[type="submit"]'
+                  ) as HTMLElement;
+                  if (submitButton) {
+                    submitButton.click();
+                  } else {
+                    // If button not found, navigate directly
+                    await navigate("/confirmation");
+                  }
+                } else {
+                  setLastAction("Please complete your payment information");
+                }
+              } else {
+                // If not on payment page, navigate to it
+                setLastAction("Navigating to checkout");
+                await navigate("/payment");
+              }
+              handled = true;
+              break;
+            case "showRunningGear":
+              setLastAction("Navigating to running products");
+              await navigate("/products/jogging");
+              handled = true;
+              break;
+            case "clearFilters":
+              clearFilters();
+              setLastAction("All filters cleared");
+              console.log("All filters cleared via action handler");
+              handled = true;
+              break;
+          }
+          break;
+      }
+
+      // If no handler successfully processed the command
+      if (!handled) {
+        setLastAction(`Command not recognized: "${command}"`);
+        console.log("No handler successfully processed the command.");
+        logAction(`No handler processed: "${command}"`, false);
+      } else {
+        // Log performance of the handler
+        const handlerTime = performance.now() - handlerStartTime;
+        console.log(`Handler execution took ${handlerTime.toFixed(2)}ms`);
+        logAction(`Successfully handled "${command}" (${primaryIntent})`);
+      }
+    } catch (error) {
+      console.error("Error processing voice command:", error);
+      setLastAction(`Error processing: "${command}"`);
+      logAction(`Error processing: "${command}"`, false);
+
+      // Try recovery if needed
+      handleRecovery();
+    }
+  };
+
+  // First-tier intent classification using the master classifier
+  const classifyPrimaryIntent = async (transcript: string): Promise<string> => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = prompts.masterIntentClassifier.replace(
+        "{transcript}",
+        transcript
+      );
+
+      const result = await model.generateContent(prompt);
+      const intent = await result.response.text().trim();
+
+      // Return the identified intent category
+      return intent;
+    } catch (error) {
+      console.error("Intent classification error:", error);
+      // Default to general_command if classification fails
+      return "general_command";
+    }
+  };
+
+  // Enhanced handleUserInfoUpdate function to fully handle credit card information
+  const handleUserInfoUpdate = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = prompts.userInfoUpdate.replace("{transcript}", transcript);
+
+      const result = await model.generateContent(prompt);
+      const responseText = await result.response.text();
+      const cleanedResponse = responseText
+        .replace("```json", "")
+        .replace("```", "");
+
+      try {
+        const response = JSON.parse(cleanedResponse);
+
+        if (response.isUserInfoUpdate) {
+          // Get current user info
+          const currentInfo = getUserInfo();
+
+          // Update with new information
+          const updatedInfo: UserInfo = { ...currentInfo };
+          const updatedFields = [];
+
+          // Update personal information
+          if (response.name) {
+            updatedInfo.name = response.name;
+            updatedFields.push("name");
+          }
+          if (response.email) {
+            updatedInfo.email = response.email;
+            updatedFields.push("email");
+          }
+          if (response.address) {
+            updatedInfo.address = response.address;
+            updatedFields.push("address");
+          }
+          if (response.phone) {
+            updatedInfo.phone = response.phone;
+            updatedFields.push("phone");
+          }
+
+          // Update credit card information
+          if (response.cardName) {
+            updatedInfo.cardName = response.cardName;
+            updatedFields.push("card name");
+          }
+          if (response.cardNumber) {
+            updatedInfo.cardNumber = response.cardNumber;
+            updatedFields.push("card number");
+          }
+          if (response.expiryDate) {
+            updatedInfo.expiryDate = response.expiryDate;
+            updatedFields.push("card expiry date");
+          }
+          if (response.cvv) {
+            updatedInfo.cvv = response.cvv;
+            updatedFields.push("CVV");
+          }
+
+          // Only proceed if we have actual updates
+          if (updatedFields.length > 0) {
+            // Update user info in localStorage
+            updateUserInfo(updatedInfo);
+
+            // Log updates for debugging
+            console.log("User info updated:", updatedFields);
+            console.log("Updated data:", {
+              cardName: updatedInfo.cardName,
+              cardNumber: updatedInfo.cardNumber ? "****" : null,
+              expiryDate: updatedInfo.expiryDate,
+              cvv: updatedInfo.cvv ? "***" : null,
+            });
+
+            // Create a feedback message
+            const feedbackMessage = `Updated your ${updatedFields.join(", ")}`;
+
+            // Dispatch a custom event to notify other components
+            window.dispatchEvent(
+              new CustomEvent("userInfoUpdated", {
+                detail: {
+                  message: feedbackMessage,
+                  updatedFields: updatedFields,
+                },
+              })
+            );
+
+            setLastAction(feedbackMessage);
+            return true;
+          }
+        }
+
+        return false;
+      } catch (parseError) {
+        console.error("Error parsing JSON response:", parseError);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error in handleUserInfoUpdate:", error);
+      return false;
+    }
+  };
+
+  // Move handleCategoryNavigation inside the component
+  const handleCategoryNavigation = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = prompts.categoryNavigation.replace(
+        "{transcript}",
+        transcript
+      );
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text().trim().toLowerCase();
+
+      if (response === "gym") {
+        console.log("Navigating to gym category");
+        await navigate("/products/gym");
+        return true;
+      } else if (response === "yoga") {
+        console.log("Navigating to yoga category");
+        await navigate("/products/yoga");
+        return true;
+      } else if (response === "running") {
+        console.log("Navigating to running category");
+        await navigate("/products/jogging");
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Category navigation detection error:", error);
+      return false;
+    }
+  };
+  const handleProductActions = async (transcript: string) => {
+    try {
+      // Check if we're on a product page by looking at the URL
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith("/product/")) {
+        return false;
+      }
+
+      const productId = currentPath.split("/").pop();
+      const product = products.find((p) => p.id === productId);
+
+      if (!product) {
+        console.error("Product not found:", productId);
+        return false;
       }
 
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      const prompt = `
-        You are a shopping assistant that helps users navigate an e-commerce website.
-        Analyze the following voice command and determine which function to call.
-        
-        User command: "${transcript}"
-  
-        Available functions:
-        ${Object.values(availableFunctions)
-          .map((fn) => `- ${fn.name}: ${fn.description}`)
-          .join("\n")}
-  
-        Return ONLY the function name that best matches the user's intent, or "unknown" if no function matches.
-        IMPORTANT: If the user is asking to clear, reset, or remove filters in ANY way, you MUST return "clearFilters".
-        Do not include any other text in your response.
-      `;
+      const prompt = prompts.productAction
+        .replace("{productName}", product.name)
+        .replace("{sizes}", product.sizes.join(", "))
+        .replace("{transcript}", transcript);
 
       const result = await model.generateContent(prompt);
-      const response = await result.response.text().trim();
-      return response;
+      const response = await result.response.text();
+      const cleanedResponse = response
+        .replace("```json", "")
+        .replace("```", "");
+
+      try {
+        const parsedAction = JSON.parse(cleanedResponse.trim());
+        console.log("Detected product action:", parsedAction);
+
+        if (parsedAction.action === "none") {
+          return false;
+        }
+
+        // Handle size selection - update to use context
+        if (parsedAction.action === "size" && parsedAction.size) {
+          // Find the matching size (case-insensitive)
+          const matchedSize = product.sizes.find(
+            (size) => size.toLowerCase() === parsedAction.size.toLowerCase()
+          );
+
+          if (matchedSize) {
+            // Update the context with the correct case
+            setSelectedSize(matchedSize);
+            console.log(`Selected size: ${matchedSize}`);
+            return true;
+          } else {
+            console.log(`Size not found: ${parsedAction.size}`);
+          }
+        }
+
+        // Handle quantity change - update to use context
+        if (parsedAction.action === "quantity" && parsedAction.quantity) {
+          const newQuantity = parseInt(parsedAction.quantity);
+          if (!isNaN(newQuantity) && newQuantity > 0) {
+            setQuantity(newQuantity);
+            console.log(`Set quantity to: ${newQuantity}`);
+            return true;
+          }
+        }
+
+        // Handle add to cart - keep DOM manipulation for this action
+        if (parsedAction.action === "addToCart") {
+          const addToCartButton = document.querySelector(
+            'button[data-action="add-to-cart"]'
+          ) as HTMLElement;
+          if (addToCartButton) {
+            addToCartButton.click();
+            console.log("Added product to cart");
+          } else {
+            // Try to find button by text content
+            const buttons = document.querySelectorAll("button");
+            for (const button of Array.from(buttons)) {
+              if (button.textContent?.toLowerCase().includes("add to cart")) {
+                (button as HTMLElement).click();
+                console.log("Added product to cart");
+                break;
+              }
+            }
+          }
+        }
+
+        return true;
+      } catch (error) {
+        console.error("Error parsing product action JSON:", error);
+        return false;
+      }
     } catch (error) {
-      console.error("Gemini API error:", error);
-      return "unknown";
+      console.error("Product action error:", error);
+      return false;
+    }
+  };
+
+  const handleCartNavigation = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = prompts.cartNavigation.replace("{transcript}", transcript);
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text().trim().toLowerCase();
+
+      if (response === "yes") {
+        console.log("Navigating to cart page");
+        await navigate("/cart");
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Cart navigation detection error:", error);
+      return false;
     }
   };
 
@@ -231,24 +722,13 @@ export const VoiceListener = () => {
         keywords: p.name.toLowerCase().split(" "),
       }));
 
-      const prompt = `
-        You are a shopping assistant for a sports apparel website.
-        Analyze this voice command and determine if the user is asking to view details about a specific product.
-        
-        User command: "${transcript}"
-        
-        Available products:
-        ${products
-          .map((p) => `- ${p.name}: ${p.description.substring(0, 50)}...`)
-          .join("\n")}
-        
-        INSTRUCTIONS:
-        1. If the user is asking to see details, view, or get more information about a specific product, identify which product they're referring to.
-        2. Return ONLY the exact product name as listed above if you can identify it.
-        3. If the user is not asking about a specific product or you cannot determine which product, return "none".
-        
-        Return ONLY the product name or "none". Do not include any other text in your response.
-      `;
+      const productListText = products
+        .map((p) => `- ${p.name}: ${p.description.substring(0, 50)}...`)
+        .join("\n");
+
+      const prompt = prompts.productDetailNavigation
+        .replace("{transcript}", transcript)
+        .replace("{productList}", productListText);
 
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim();
@@ -296,102 +776,6 @@ export const VoiceListener = () => {
     }
   };
 
-  // Update the handleVoiceCommand function to check for product detail navigation
-  const handleVoiceCommand = async (command: string) => {
-    console.log("Processing command:", command);
-
-    // Set the last action to show feedback to the user
-    setLastAction(`Processing: "${command}"`);
-
-    // Add this near the start of handleVoiceCommand
-    const isUserInfoUpdate = await handleUserInfoUpdate(command);
-    if (isUserInfoUpdate) {
-      return;
-    }
-
-    const isCartNavigation = await handleCartNavigation(command);
-    if (isCartNavigation) {
-      setLastAction(`Navigating to cart: "${command}"`);
-      return;
-    }
-
-    const isProductAction = await handleProductActions(command);
-    if (isProductAction) {
-      setLastAction(`Product action completed: "${command}"`);
-      return;
-    }
-
-    // First check if this is a product detail navigation command
-    const isProductDetailNavigation = await handleProductDetailNavigation(
-      command
-    );
-    if (isProductDetailNavigation) {
-      setLastAction(`Navigating to product: "${command}"`);
-      return;
-    }
-
-    // Then check if this is a category navigation command
-    const isCategoryNavigation = await handleCategoryNavigation(command);
-    if (isCategoryNavigation) {
-      setLastAction(`Navigating to category: "${command}"`);
-      return;
-    }
-
-    // Then check if this is a clear filters command
-    const isFilterCleared = await handleClearFilters(command);
-    if (isFilterCleared) {
-      setLastAction(`Filters cleared: "${command}"`);
-      return;
-    }
-
-    // Then check for filter updates
-    const filterResult = await interpretFilterCommand(command);
-    if (filterResult === "filters_updated") {
-      setLastAction(`Filters updated: "${command}"`);
-      console.log("Filters updated via voice");
-      return;
-    }
-
-    // Finally, handle other commands
-    const action = await interpretCommand(command);
-    console.log("Interpreted action:", action);
-
-    switch (action) {
-      case "showGymClothes":
-        setLastAction("Navigating to gym products");
-        await navigate("/products/gym");
-        break;
-      case "showYogaEquipment":
-        setLastAction("Navigating to yoga products");
-        await navigate("/products/yoga");
-        break;
-      case "goToCart":
-        setLastAction("Navigating to cart");
-        await navigate("/cart");
-        break;
-      case "checkout":
-        setLastAction("Navigating to checkout");
-        await navigate("/payment");
-        break;
-      case "showRunningGear":
-        setLastAction("Navigating to running products");
-        await navigate("/products/jogging");
-        break;
-      case "applyFilters":
-        // Already handled by interpretFilterCommand
-        break;
-      case "clearFilters":
-        // Call the clearFilters function from context
-        clearFilters();
-        setLastAction("All filters cleared");
-        console.log("All filters cleared via action handler");
-        break;
-      default:
-        setLastAction(`Command not recognized: "${command}"`);
-        console.log("Unknown command:", command);
-    }
-  };
-
   // Improve the interpretFilterCommand function to ensure case matching
   const interpretFilterCommand = async (transcript: string) => {
     try {
@@ -417,39 +801,15 @@ export const VoiceListener = () => {
         filterOptions.subCategories.map((c) => [c.toLowerCase(), c])
       );
 
-      // Update the prompt to emphasize returning lowercase values
-      const prompt = `
-        You are a shopping assistant that helps users filter products.
-        Analyze this voice command and determine the filters to apply.
-        Command: "${transcript}"
-
-        Available filters:
-        - Colors: ${filterOptions.colors.join(", ")}
-        - Sizes: ${filterOptions.sizes.join(", ")}
-        - Materials: ${filterOptions.materials.join(", ")}
-        - Genders: ${filterOptions.genders.join(", ")}
-        - Brands: ${filterOptions.brands.join(", ")}
-        - Categories: ${filterOptions.subCategories.join(", ")}
-        - Price Range: Any range between 0-200 dollars
-
-        Return a JSON object with ONLY the filters mentioned in the command.
-        IMPORTANT: Use EXACTLY these keys in your response:
-        {
-          "colors": [],
-          "sizes": [],
-          "materials": [],
-          "genders": [],
-          "brands": [],
-          "subCategories": [],
-          "price": [min, max]
-        }
-        
-        Only include filters that were explicitly mentioned. Use empty arrays for filter types not mentioned.
-        For price, use the format [min, max] with values between 0-200.
-        If no specific filters were detected, return an empty object {}.
-        
-        CRITICAL: Return all values in lowercase for consistency. For example, if the user mentions "PowerLift", return it as "powerlift".
-      `;
+      // Update to use prompts.ts
+      const prompt = prompts.filterCommand
+        .replace("{transcript}", transcript)
+        .replace("{colors}", filterOptions.colors.join(", "))
+        .replace("{sizes}", filterOptions.sizes.join(", "))
+        .replace("{materials}", filterOptions.materials.join(", "))
+        .replace("{genders}", filterOptions.genders.join(", "))
+        .replace("{brands}", filterOptions.brands.join(", "))
+        .replace("{categories}", filterOptions.subCategories.join(", "));
 
       const result = await model.generateContent(prompt);
       const response = await result.response.text();
@@ -535,236 +895,281 @@ export const VoiceListener = () => {
     }
   };
 
-  // Move handleCategoryNavigation inside the component
-  const handleCategoryNavigation = async (transcript: string) => {
+  // Update the interpretCommand function to better detect clearFilters intent
+  const interpretCommand = async (transcript: string) => {
+    try {
+      // First, directly check for clear filter phrases
+      const clearFilterPhrases = [
+        "clear filter",
+        "reset filter",
+        "remove filter",
+        "clear all filter",
+        "reset all filter",
+        "remove all filter",
+        "clear the filter",
+        "start over",
+      ];
+
+      // Check if the transcript contains any clear filter phrases
+      for (const phrase of clearFilterPhrases) {
+        if (transcript.includes(phrase)) {
+          console.log("Direct match for clear filters detected");
+          return "clearFilters";
+        }
+      }
+
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const availableFunctionsText = Object.values(availableFunctions)
+        .map((fn) => `- ${fn.name}: ${fn.description}`)
+        .join("\n");
+
+      const prompt = prompts.interpretCommand
+        .replace("{transcript}", transcript)
+        .replace("{availableFunctions}", availableFunctionsText);
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response.text().trim();
+      return response;
+    } catch (error) {
+      console.error("Gemini API error:", error);
+      return "unknown";
+    }
+  };
+
+  // Handle "place order" or "complete purchase" commands
+  const handleOrderCompletion = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = prompts.categoryNavigation.replace(
+
+      const prompt = prompts.orderCompletion.replace(
         "{transcript}",
         transcript
       );
-      const result = await model.generateContent(prompt);
-      const response = await result.response.text().trim().toLowerCase();
-
-      if (response === "gym") {
-        console.log("Navigating to gym category");
-        await navigate("/products/gym");
-        return true;
-      } else if (response === "yoga") {
-        console.log("Navigating to yoga category");
-        await navigate("/products/yoga");
-        return true;
-      } else if (response === "running") {
-        console.log("Navigating to running category");
-        await navigate("/products/jogging");
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error("Category navigation detection error:", error);
-      return false;
-    }
-  };
-  const handleProductActions = async (transcript: string) => {
-    try {
-      // Check if we're on a product page by looking at the URL
-      const currentPath = window.location.pathname;
-      if (!currentPath.startsWith("/product/")) {
-        return false;
-      }
-
-      const productId = currentPath.split("/").pop();
-      const product = products.find((p) => p.id === productId);
-
-      if (!product) {
-        console.error("Product not found:", productId);
-        return false;
-      }
-
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      const prompt = `
-        You are a shopping assistant for a sports apparel website.
-        The user is currently viewing this product: ${product.name}
-        Available sizes: ${product.sizes.join(", ")}
-        
-        Analyze this voice command: "${transcript}"
-        
-        Determine if the user wants to:
-        1. Select a specific size
-        2. Change the quantity
-        3. Add the product to cart
-        
-        Return a JSON object with the following structure:
-        {
-          "action": "size" | "quantity" | "addToCart" | "none",
-          "size": "the size mentioned" | null,
-          "quantity": number | null
-        }
-        
-        INSTRUCTIONS:
-        - For size, return the exact size as listed in available sizes, or null if no size mentioned
-        - For quantity, return the number mentioned, or null if no quantity mentioned
-        - If the user wants to add to cart, set action to "addToCart"
-        - If no relevant action is detected, set action to "none"
-        - Return ONLY the JSON object, no other text
-      `;
-
-      const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      const cleanedResponse = response
-        .replace("```json", "")
-        .replace("```", "");
-
-      try {
-        const parsedAction = JSON.parse(cleanedResponse.trim());
-        console.log("Detected product action:", parsedAction);
-
-        if (parsedAction.action === "none") {
-          return false;
-        }
-
-        // Handle size selection - update to use context
-        if (parsedAction.action === "size" && parsedAction.size) {
-          // Find the matching size (case-insensitive)
-          const matchedSize = product.sizes.find(
-            (size) => size.toLowerCase() === parsedAction.size.toLowerCase()
-          );
-
-          if (matchedSize) {
-            // Update the context with the correct case
-            setSelectedSize(matchedSize);
-            console.log(`Selected size: ${matchedSize}`);
-            return true;
-          } else {
-            console.log(`Size not found: ${parsedAction.size}`);
-          }
-        }
-
-        // Handle quantity change - update to use context
-        if (parsedAction.action === "quantity" && parsedAction.quantity) {
-          const newQuantity = parseInt(parsedAction.quantity);
-          if (!isNaN(newQuantity) && newQuantity > 0) {
-            setQuantity(newQuantity);
-            console.log(`Set quantity to: ${newQuantity}`);
-            return true;
-          }
-        }
-
-        // Handle add to cart - keep DOM manipulation for this action
-        if (parsedAction.action === "addToCart") {
-          const addToCartButton = document.querySelector(
-            'button[data-action="add-to-cart"]'
-          ) as HTMLElement;
-          if (addToCartButton) {
-            addToCartButton.click();
-            console.log("Added product to cart");
-          } else {
-            // Try to find button by text content
-            const buttons = document.querySelectorAll("button");
-            for (const button of Array.from(buttons)) {
-              if (button.textContent?.toLowerCase().includes("add to cart")) {
-                (button as HTMLElement).click();
-                console.log("Added product to cart");
-                break;
-              }
-            }
-          }
-        }
-
-        return true;
-      } catch (error) {
-        console.error("Error parsing product action JSON:", error);
-        return false;
-      }
-    } catch (error) {
-      console.error("Product action error:", error);
-      return false;
-    }
-  };
-
-  const handleCartNavigation = async (transcript: string) => {
-    try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      const prompt = `
-        You are a shopping assistant for an e-commerce website.
-        Analyze this voice command and determine if the user wants to view their shopping cart.
-        
-        User command: "${transcript}"
-        
-        Examples of cart viewing requests:
-        - "Show me my cart"
-        - "I want to see my cart"
-        - "What's in my cart"
-        - "View my shopping cart"
-        - "Go to cart"
-        - "Take me to my cart"
-        - "Show me what I've added"
-        - "View items in my cart"
-        - "Check my cart"
-        
-        Return ONLY "yes" if the user wants to view their cart, or "no" if not.
-        Do not include any other text in your response.
-      `;
 
       const result = await model.generateContent(prompt);
       const response = await result.response.text().trim().toLowerCase();
 
       if (response === "yes") {
-        console.log("Navigating to cart page");
-        await navigate("/cart");
+        // Check if user is on the payment page
+        const currentPath = window.location.pathname;
+        const isOnPaymentPage = currentPath === "/payment";
+
+        if (isOnPaymentPage) {
+          // Check if the user has provided the necessary payment information
+          const userInfo = getUserInfo();
+          const hasRequiredInfo =
+            userInfo.cardNumber &&
+            userInfo.expiryDate &&
+            userInfo.cvv &&
+            userInfo.name &&
+            userInfo.email &&
+            userInfo.address;
+
+          if (hasRequiredInfo) {
+            // If on payment page and has required info, complete the order
+            console.log("Completing order and navigating to confirmation page");
+            setLastAction("Completing your order...");
+
+            // Simulate a button click to submit the form
+            const submitButton = document.querySelector(
+              'button[type="submit"]'
+            ) as HTMLElement;
+            if (submitButton) {
+              submitButton.click();
+            } else {
+              // If button not found, navigate directly
+              await navigate("/confirmation");
+            }
+
+            return true;
+          }
+        }
+
+        // Either not on payment page or missing required info, navigate to payment page
+        console.log("Navigating to payment page");
+        setLastAction("Taking you to complete your payment...");
+        await navigate("/payment");
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error("Cart navigation detection error:", error);
+      console.error("Order completion error:", error);
       return false;
     }
   };
 
-  const handleUserInfoUpdate = async (transcript: string) => {
+  // Add a new function to handle navigation commands (back/home)
+  const handleNavigationCommand = async (transcript: string) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = prompts.userInfo.replace("{transcript}", transcript);
+      const prompt = prompts.navigationCommand.replace(
+        "{transcript}",
+        transcript
+      );
+
       const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      const updatedResponse = response
+      const responseText = await result.response.text();
+      const cleanedResponse = responseText
         .replace("```json", "")
         .replace("```", "");
+
       try {
-        const parsedInfo = JSON.parse(updatedResponse.trim());
-        console.log("Parsed user info:", parsedInfo);
+        const response = JSON.parse(cleanedResponse.trim());
+        console.log("Navigation response:", response);
 
-        // Only update if we actually got some information
-        if (Object.keys(parsedInfo).length > 0) {
-          // Clean up the data before storing
-          const cleanedInfo: Partial<UserInfo> = {};
-
-          if (parsedInfo.name) cleanedInfo.name = parsedInfo.name.trim();
-          if (parsedInfo.email)
-            cleanedInfo.email = parsedInfo.email.trim().toLowerCase();
-          if (parsedInfo.address)
-            cleanedInfo.address = parsedInfo.address.trim();
-          if (parsedInfo.phone) cleanedInfo.phone = parsedInfo.phone.trim();
-
-          // Update the local storage
-          updateUserInfo(cleanedInfo);
-
-          // Set feedback message
-          const updatedFields = Object.keys(cleanedInfo).join(", ");
-          setLastAction(`Updated user information: ${updatedFields}`);
-          console.log("Updated user info:", cleanedInfo);
+        if (response.action === "back") {
+          console.log("Going back to previous page");
+          setLastAction("Going back to previous page");
+          window.history.back();
+          return true;
+        } else if (response.action === "home") {
+          console.log("Navigating to home page");
+          setLastAction("Taking you to the home page");
+          await navigate("/");
           return true;
         }
+
+        return false;
       } catch (error) {
-        console.error("Error parsing user info:", error);
+        console.error("Error parsing navigation command JSON:", error);
+        return false;
       }
-      return false;
     } catch (error) {
-      console.error("User info update error:", error);
+      console.error("Navigation command error:", error);
+      return false;
+    }
+  };
+
+  // Add a function to handle removing specific filters
+  const handleRemoveFilters = async (transcript: string) => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      // Create reference maps for exact casing
+      const colorMap = Object.fromEntries(
+        filterOptions.colors.map((c) => [c.toLowerCase(), c])
+      );
+      const sizeMap = Object.fromEntries(
+        filterOptions.sizes.map((s) => [s.toLowerCase(), s])
+      );
+      const materialMap = Object.fromEntries(
+        filterOptions.materials.map((m) => [m.toLowerCase(), m])
+      );
+      const genderMap = Object.fromEntries(
+        filterOptions.genders.map((g) => [g.toLowerCase(), g])
+      );
+      const brandMap = Object.fromEntries(
+        filterOptions.brands.map((b) => [b.toLowerCase(), b])
+      );
+      const categoryMap = Object.fromEntries(
+        filterOptions.subCategories.map((c) => [c.toLowerCase(), c])
+      );
+
+      const prompt = prompts.removeFilterCommand
+        .replace("{transcript}", transcript)
+        .replace("{colors}", filterOptions.colors.join(", "))
+        .replace("{sizes}", filterOptions.sizes.join(", "))
+        .replace("{materials}", filterOptions.materials.join(", "))
+        .replace("{genders}", filterOptions.genders.join(", "))
+        .replace("{brands}", filterOptions.brands.join(", "))
+        .replace("{categories}", filterOptions.subCategories.join(", "));
+
+      const result = await model.generateContent(prompt);
+      const responseText = await result.response.text();
+      const cleanedResponse = responseText
+        .replace("```json", "")
+        .replace("```", "");
+
+      try {
+        const parsedRemoval = JSON.parse(cleanedResponse.trim());
+        console.log("Filter removal response:", parsedRemoval);
+
+        if (!parsedRemoval.isRemoveFilter) {
+          return false;
+        }
+
+        // Track which filters were removed for UI feedback
+        let filtersRemoved = false;
+        const removedFilters: string[] = [];
+
+        // Helper function to correctly map and remove filters
+        const processFilterRemoval = (
+          filterType: keyof FilterState,
+          valuesToRemove: string[],
+          mappingFn: (val: string) => string
+        ) => {
+          if (valuesToRemove && valuesToRemove.length > 0) {
+            // Map the values to their correct casing
+            const normalizedValues = valuesToRemove.map(
+              (val) => mappingFn(val) || val
+            );
+
+            // Add to our tracking for UI feedback
+            filtersRemoved = true;
+            normalizedValues.forEach((val) => {
+              removedFilters.push(`${filterType}: ${val}`);
+            });
+
+            // Use the context function to remove the filters
+            removeFilter(filterType, normalizedValues);
+          }
+        };
+
+        // Process each filter type
+        processFilterRemoval(
+          "colors",
+          parsedRemoval.colors,
+          (val) => colorMap[val.toLowerCase()]
+        );
+        processFilterRemoval(
+          "sizes",
+          parsedRemoval.sizes,
+          (val) => sizeMap[val.toLowerCase()]
+        );
+        processFilterRemoval(
+          "materials",
+          parsedRemoval.materials,
+          (val) => materialMap[val.toLowerCase()]
+        );
+        processFilterRemoval(
+          "genders",
+          parsedRemoval.genders,
+          (val) => genderMap[val.toLowerCase()]
+        );
+        processFilterRemoval(
+          "brands",
+          parsedRemoval.brands,
+          (val) => brandMap[val.toLowerCase()]
+        );
+        processFilterRemoval(
+          "subCategories",
+          parsedRemoval.subCategories,
+          (val) => categoryMap[val.toLowerCase()]
+        );
+
+        // Handle price range removal
+        if (parsedRemoval.price === true) {
+          removeFilter("price", null);
+          filtersRemoved = true;
+          removedFilters.push("price range");
+        }
+
+        if (filtersRemoved) {
+          // Update the UI feedback
+          const feedbackMessage = `Removed ${removedFilters.join(", ")}`;
+          setLastAction(feedbackMessage);
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error("Error parsing filter removal JSON:", error);
+        return false;
+      }
+    } catch (error) {
+      console.error("Filter removal error:", error);
       return false;
     }
   };

@@ -3,6 +3,10 @@ interface UserInfo {
   email: string;
   address: string;
   phone: string;
+  cardName?: string;
+  cardNumber?: string;
+  expiryDate?: string;
+  cvv?: string;
 }
 
 export const useUserInfo = () => {
@@ -12,7 +16,11 @@ export const useUserInfo = () => {
       name: '',
       email: '',
       address: '',
-      phone: ''
+      phone: '',
+      cardName: '',
+      cardNumber: '',
+      expiryDate: '',
+      cvv: ''
     };
   };
 
