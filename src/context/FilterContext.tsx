@@ -46,6 +46,15 @@ export const FilterProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Update the updateFilters function to add to existing filters rather than replace them
   const updateFilters = (newFilters: Partial<FilterState>) => {
+    // Ensure input is always an object
+    if (typeof newFilters !== "object" || newFilters === null) {
+      console.error(
+        "Invalid newFilters provided to updateFilters:",
+        newFilters
+      );
+      return; // Do nothing if input is invalid
+    }
+
     setFilters((prevFilters) => {
       const updatedFilters = { ...prevFilters };
 
@@ -55,53 +64,46 @@ export const FilterProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Handle price range separately
         if (filterKey === "price" && newFilters.price) {
-          updatedFilters.price = newFilters.price;
+          // Validate price range
+          if (
+            Array.isArray(newFilters.price) &&
+            newFilters.price.length === 2 &&
+            typeof newFilters.price[0] === "number" &&
+            typeof newFilters.price[1] === "number" &&
+            newFilters.price[0] >= 0 &&
+            newFilters.price[1] <= 200 &&
+            newFilters.price[0] <= newFilters.price[1]
+          ) {
+            updatedFilters.price = newFilters.price;
+          }
         }
         // Handle searchQuery separately
         else if (
           filterKey === "searchQuery" &&
-          newFilters.searchQuery !== undefined
+          typeof newFilters.searchQuery === "string"
         ) {
           updatedFilters.searchQuery = newFilters.searchQuery;
         }
-        // Handle array filters by adding new values
+        // Handle array filters by adding new values (assumes validation and casing are handled upstream)
         else if (
           Array.isArray(newFilters[filterKey]) &&
           Array.isArray(updatedFilters[filterKey])
         ) {
-          // Improved case-insensitive comparison
-          const existingValues = (updatedFilters[filterKey] as string[]).map(
-            (v) => v.toLowerCase()
-          );
+          const currentValues = updatedFilters[filterKey] as string[];
+          const newValuesToAdd = (newFilters[filterKey] as string[]).filter(
+            (v) => v
+          ); // Filter out empty/null values
 
-          // Process each new value
-          (newFilters[filterKey] as string[])
-            .filter((v) => v) // Filter out empty values
-            .forEach((value) => {
-              const lowerValue = value.toLowerCase();
-
-              // Only add if it doesn't already exist (case-insensitive)
-              if (!existingValues.includes(lowerValue)) {
-                // For brands specifically, try to match with correct casing from filterOptions
-                if (filterKey === "brands") {
-                  const correctCaseBrand = filterOptions.brands.find(
-                    (b) => b.toLowerCase() === lowerValue
-                  );
-                  if (correctCaseBrand) {
-                    (updatedFilters[filterKey] as string[]).push(
-                      correctCaseBrand
-                    );
-                  } else {
-                    (updatedFilters[filterKey] as string[]).push(value);
-                  }
-                } else {
-                  (updatedFilters[filterKey] as string[]).push(value);
-                }
-              }
-            });
+          newValuesToAdd.forEach((newValue) => {
+            // Simple case-sensitive check to avoid exact duplicates if needed, though upstream validation should handle most cases
+            if (!currentValues.includes(newValue)) {
+              currentValues.push(newValue);
+            }
+          });
         }
       });
 
+      console.log("Filters updated in context:", updatedFilters);
       return updatedFilters;
     });
   };

@@ -110,49 +110,43 @@ export const prompts = {
 
   filterCommand: `
     You are a high-precision filter detection system for an e-commerce voice assistant.
-    Your task is to extract explicit and implied filter preferences from voice commands.
+    Your task is to extract explicit and implied filter preferences from voice commands ONLY if they match the available options.
     
     Analyze this voice command: "{transcript}"
 
-    Available filters:
+    Available filters (Use ONLY these values):
     - Colors: {colors}
     - Sizes: {sizes}
     - Materials: {materials}
     - Genders: {genders}
     - Brands: {brands}
-    - Categories: {categories}
+    - Categories (SubCategories): {categories}
     - Price Range: Any range between 0-200 dollars
 
     CONTEXTUAL UNDERSTANDING INSTRUCTIONS:
-    1. Look for both DIRECT and INDIRECT mentions of filter preferences
-    2. For gender filters, infer from contextual clues:
-       - "with my sister/girlfriend/mom/daughter/wife" → Women's
-       - "with my brother/boyfriend/dad/son/husband" → Men's
-       - "with my kids/children" → include both
-       - "for her/she/woman" → Women's
-       - "for him/he/man" → Men's
-    3. For colors, detect preferences even when phrased indirectly
-       - "like the sky/ocean/water/sea" → blue
-       - "like grass/trees/forest/lime" → green
-       - "like the sun/banana/lemon" → yellow
-       - "like blood/apple/cherry/rose" → red
-       - "like night/coal/ink" → black
-       - "like snow/clouds/milk" → white
-    4. Infer size needs from descriptions:
-       - "plus size/large/big/wide" → XL, XXL
-       - "petite/small/slim/tiny" → XS, S
-       - "tall/long" → L, XL
-       - "average/regular/medium" → M
+    1. Look for DIRECT mentions of filter preferences. Map ONLY to the available filter values listed above.
+    2. For gender filters, infer from contextual clues BUT ONLY map to 'men', 'women', or 'unisex' if found:
+       - "with my sister/girlfriend/mom/daughter/wife" → women
+       - "with my brother/boyfriend/dad/son/husband" → men
+       - "for her/she/woman" → women
+       - "for him/he/man" → men
+    3. For colors, detect preferences BUT ONLY map to the listed colors:
+       - "like the sky/ocean" → blue
+       - "like grass/trees" → green
+       - "like blood/apple" → red
+       - "like night/coal" → black
+       - "like snow/clouds" → white
+    4. Infer size needs BUT ONLY map to the listed sizes:
+       - "plus size/large/big" → XL, XXL
+       - "petite/small/slim" → XS, S
+       - "average/regular" → M
     5. Detect price ranges from phrases:
-       - "affordable/cheap/inexpensive/budget" → [0, 50]
-       - "mid-range/reasonable/moderate" → [50, 100]
-       - "premium/expensive/high-end/luxury" → [100, 200]
-    6. For activities and use cases:
-       - "for running/jogging/race" → running category
-       - "for yoga/stretching/meditation" → yoga category
-       - "for gym/workout/exercise/training/lifting" → gym category
+       - "affordable/cheap/budget" → [0, 50]
+       - "mid-range/moderate" → [50, 100]
+       - "premium/expensive/high-end" → [100, 200]
+    6. IMPORTANT: For Categories (SubCategories), ONLY apply a subcategory if it is explicitly mentioned or strongly implied by specific item types (e.g., 'mat' implies 'equipment', 'shoes' implies 'footwear'). DO NOT add 'equipment' by default or for general terms like 'gear' or 'items'.
 
-    Return a JSON object with ONLY the filters mentioned in the command.
+    Return a JSON object with ONLY the filters mentioned in the command AND that match the available options.
     IMPORTANT: Use EXACTLY these keys in your response:
     {
       "colors": [],
@@ -164,11 +158,11 @@ export const prompts = {
       "price": [min, max]
     }
     
-    Only include filters that were explicitly mentioned or strongly implied. Use empty arrays for filter types not mentioned.
+    Only include filters that were explicitly mentioned or strongly implied AND match the provided lists. Use empty arrays for filter types not mentioned or if no valid match was found.
     For price, use the format [min, max] with values between 0-200.
-    If no specific filters were detected, return an empty object {}.
+    If no specific valid filters were detected, return an empty object {}.
     
-    CRITICAL: Return all values in lowercase for consistency. For example, if the user mentions "PowerLift", return it as "powerlift".
+    CRITICAL: Return all values in lowercase for consistency. Ensure every value returned exists in the provided filter lists (colors, sizes, materials, etc.).
   `,
 
   productDetailNavigation: `

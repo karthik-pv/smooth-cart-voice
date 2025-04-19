@@ -781,27 +781,49 @@ export const VoiceListener = () => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      // Create reference maps for exact casing
+      // Create reference maps for exact casing AND sets for quick validation (lowercase)
+      const validColors = new Set(
+        filterOptions.colors.map((c) => c.toLowerCase())
+      );
       const colorMap = Object.fromEntries(
         filterOptions.colors.map((c) => [c.toLowerCase(), c])
+      );
+
+      const validSizes = new Set(
+        filterOptions.sizes.map((s) => s.toLowerCase())
       );
       const sizeMap = Object.fromEntries(
         filterOptions.sizes.map((s) => [s.toLowerCase(), s])
       );
+
+      const validMaterials = new Set(
+        filterOptions.materials.map((m) => m.toLowerCase())
+      );
       const materialMap = Object.fromEntries(
         filterOptions.materials.map((m) => [m.toLowerCase(), m])
+      );
+
+      const validGenders = new Set(
+        filterOptions.genders.map((g) => g.toLowerCase())
       );
       const genderMap = Object.fromEntries(
         filterOptions.genders.map((g) => [g.toLowerCase(), g])
       );
+
+      const validBrands = new Set(
+        filterOptions.brands.map((b) => b.toLowerCase())
+      );
       const brandMap = Object.fromEntries(
         filterOptions.brands.map((b) => [b.toLowerCase(), b])
+      );
+
+      const validSubCategories = new Set(
+        filterOptions.subCategories.map((c) => c.toLowerCase())
       );
       const categoryMap = Object.fromEntries(
         filterOptions.subCategories.map((c) => [c.toLowerCase(), c])
       );
 
-      // Update to use prompts.ts
       const prompt = prompts.filterCommand
         .replace("{transcript}", transcript)
         .replace("{colors}", filterOptions.colors.join(", "))
@@ -813,84 +835,132 @@ export const VoiceListener = () => {
 
       const result = await model.generateContent(prompt);
       const response = await result.response.text();
-      const cleanedResponse = response
-        .replace("```json", "")
-        .replace("```", "");
-      console.log(cleanedResponse);
+      const cleanedResponse = response.replace(
+        /^\s*```json\s*|\s*```\s*$/g,
+        ""
+      ); // More robust cleaning
+      console.log("Cleaned AI Response for Filters:", cleanedResponse);
 
       try {
         const parsedFilters = JSON.parse(cleanedResponse.trim());
-        console.log("Detected filters:", parsedFilters);
+        console.log("Parsed Filters from AI:", parsedFilters);
 
-        // Normalize filter keys to ensure consistency and preserve original casing
         const normalizedFilters: Partial<FilterState> = {};
+        let filtersApplied = false;
 
-        // Process each filter type with proper key names and restore original casing
-        if (parsedFilters.colors && parsedFilters.colors.length > 0) {
-          normalizedFilters.colors = parsedFilters.colors.map(
-            (c: string) => colorMap[c.toLowerCase()] || c
-          );
-          console.log("Normalized colors:", normalizedFilters.colors);
+        // Validate and normalize each filter type
+        if (parsedFilters.colors && Array.isArray(parsedFilters.colors)) {
+          const validatedColors = parsedFilters.colors
+            .map((c: string) => c.toLowerCase())
+            .filter((lc: string) => validColors.has(lc))
+            .map((lc: string) => colorMap[lc]); // Restore casing
+          if (validatedColors.length > 0) {
+            normalizedFilters.colors = validatedColors;
+            filtersApplied = true;
+            console.log("Validated Colors:", validatedColors);
+          }
         }
 
-        if (parsedFilters.sizes && parsedFilters.sizes.length > 0) {
-          normalizedFilters.sizes = parsedFilters.sizes.map(
-            (s: string) => sizeMap[s.toLowerCase()] || s
-          );
-          console.log("Normalized sizes:", normalizedFilters.sizes);
+        if (parsedFilters.sizes && Array.isArray(parsedFilters.sizes)) {
+          const validatedSizes = parsedFilters.sizes
+            .map((s: string) => s.toLowerCase())
+            .filter((ls: string) => validSizes.has(ls))
+            .map((ls: string) => sizeMap[ls]); // Restore casing
+          if (validatedSizes.length > 0) {
+            normalizedFilters.sizes = validatedSizes;
+            filtersApplied = true;
+            console.log("Validated Sizes:", validatedSizes);
+          }
         }
 
-        if (parsedFilters.materials && parsedFilters.materials.length > 0) {
-          normalizedFilters.materials = parsedFilters.materials.map(
-            (m: string) => materialMap[m.toLowerCase()] || m
-          );
-          console.log("Normalized materials:", normalizedFilters.materials);
+        if (parsedFilters.materials && Array.isArray(parsedFilters.materials)) {
+          const validatedMaterials = parsedFilters.materials
+            .map((m: string) => m.toLowerCase())
+            .filter((lm: string) => validMaterials.has(lm))
+            .map((lm: string) => materialMap[lm]); // Restore casing
+          if (validatedMaterials.length > 0) {
+            normalizedFilters.materials = validatedMaterials;
+            filtersApplied = true;
+            console.log("Validated Materials:", validatedMaterials);
+          }
         }
 
-        if (parsedFilters.genders && parsedFilters.genders.length > 0) {
-          normalizedFilters.genders = parsedFilters.genders.map(
-            (g: string) => genderMap[g.toLowerCase()] || g
-          );
-          console.log("Normalized genders:", normalizedFilters.genders);
+        if (parsedFilters.genders && Array.isArray(parsedFilters.genders)) {
+          const validatedGenders = parsedFilters.genders
+            .map((g: string) => g.toLowerCase())
+            .filter((lg: string) => validGenders.has(lg))
+            .map((lg: string) => genderMap[lg]); // Restore casing
+          if (validatedGenders.length > 0) {
+            normalizedFilters.genders = validatedGenders;
+            filtersApplied = true;
+            console.log("Validated Genders:", validatedGenders);
+          }
         }
 
-        if (parsedFilters.brands && parsedFilters.brands.length > 0) {
-          normalizedFilters.brands = parsedFilters.brands.map(
-            (b: string) => brandMap[b.toLowerCase()] || b
-          );
-          console.log("Normalized brands:", normalizedFilters.brands);
+        if (parsedFilters.brands && Array.isArray(parsedFilters.brands)) {
+          const validatedBrands = parsedFilters.brands
+            .map((b: string) => b.toLowerCase())
+            .filter((lb: string) => validBrands.has(lb))
+            .map((lb: string) => brandMap[lb]); // Restore casing
+          if (validatedBrands.length > 0) {
+            normalizedFilters.brands = validatedBrands;
+            filtersApplied = true;
+            console.log("Validated Brands:", validatedBrands);
+          }
         }
 
         if (
           parsedFilters.subCategories &&
-          parsedFilters.subCategories.length > 0
+          Array.isArray(parsedFilters.subCategories)
         ) {
-          normalizedFilters.subCategories = parsedFilters.subCategories.map(
-            (c: string) => categoryMap[c.toLowerCase()] || c
-          );
-          console.log(
-            "Normalized categories:",
-            normalizedFilters.subCategories
-          );
+          const validatedSubCategories = parsedFilters.subCategories
+            .map((c: string) => c.toLowerCase())
+            .filter(
+              (lc: string) => validSubCategories.has(lc) && lc !== "equipment"
+            ) // Explicitly check for valid subcategories AND exclude 'equipment' here unless explicitly requested (prompt should handle this better now)
+            .map((lc: string) => categoryMap[lc]); // Restore casing
+          if (validatedSubCategories.length > 0) {
+            normalizedFilters.subCategories = validatedSubCategories;
+            filtersApplied = true;
+            console.log("Validated SubCategories:", validatedSubCategories);
+          }
         }
 
-        if (parsedFilters.price) {
-          normalizedFilters.price = parsedFilters.price;
-          console.log("Normalized price:", normalizedFilters.price);
+        if (
+          parsedFilters.price &&
+          Array.isArray(parsedFilters.price) &&
+          parsedFilters.price.length === 2
+        ) {
+          const [min, max] = parsedFilters.price;
+          if (
+            typeof min === "number" &&
+            typeof max === "number" &&
+            min >= 0 &&
+            max <= 200 &&
+            min <= max
+          ) {
+            normalizedFilters.price = [min, max];
+            filtersApplied = true;
+            console.log("Validated Price:", normalizedFilters.price);
+          }
         }
 
-        if (Object.keys(normalizedFilters).length > 0) {
-          // This will add to existing filters rather than replace them
+        if (filtersApplied) {
           updateFilters(normalizedFilters);
           return "filters_updated";
         }
       } catch (error) {
-        console.error("Error parsing filter JSON:", error);
+        console.error(
+          "Error parsing filter JSON from AI:",
+          error,
+          "Raw response:",
+          cleanedResponse
+        );
       }
 
-      return "unknown";
+      return "unknown"; // Return unknown if parsing failed or no valid filters applied
     } catch (error) {
-      console.error("Filter interpretation error:", error);
+      console.error("Filter interpretation API error:", error);
       return "unknown";
     }
   };
