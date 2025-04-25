@@ -42,7 +42,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <VoiceListener />
-              <VoiceAssistant />
+              {/* <VoiceAssistant /> */}
             </BrowserRouter>
           </TooltipProvider>
         </ProductProvider>

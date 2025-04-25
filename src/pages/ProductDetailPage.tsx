@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { useCart } from "@/context/CartContext";
-import { useProduct } from "@/context/ProductContext"; // Add this import
+import { useProduct } from "@/context/ProductContext";
 import { motion } from "framer-motion";
 
 const ProductDetailPage = () => {
@@ -26,7 +26,6 @@ const ProductDetailPage = () => {
   const { toast } = useToast();
   const { addItem } = useCart();
 
-  // Use the product context
   const {
     selectedSize,
     quantity,
@@ -37,10 +36,8 @@ const ProductDetailPage = () => {
 
   const product = products.find((p) => p.id === id);
 
-  // Keep showError as local state
   const [showError, setShowError] = useState(false);
 
-  // Reset product state when product changes
   useEffect(() => {
     if (product) {
       resetProductState();
@@ -81,20 +78,20 @@ const ProductDetailPage = () => {
     }
   };
 
-  // Make sure we're rendering the UI with the context values
   return (
     <Layout>
       {product ? (
         <div className="container mx-auto px-4 py-8">
-          {/* Product details layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Product image */}
-            <div className="rounded-lg overflow-hidden">
-              <img
-                src={product.image}
-                alt={product.name}
-                className="w-full h-auto object-cover"
-              />
+            {/* Product image - Updated styling for consistent display */}
+            <div className="rounded-lg overflow-hidden flex items-center justify-center">
+              <div className="w-full h-[500px] flex items-center justify-center">
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
             </div>
 
             {/* Product info */}

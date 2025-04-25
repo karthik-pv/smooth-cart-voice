@@ -1255,5 +1255,98 @@ export const VoiceListener = () => {
     };
   }, []);
 
-  return null;
+  // Create a restart button that's positioned over the voice assistant button
+  const handleRestartClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    // Stop any existing recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+
+    setIsListening(false);
+    console.log("Manual restart of voice recognition");
+    logAction("Manual restart of voice recognition");
+
+    // Start listening again regardless of current state
+    setTimeout(() => {
+      startListening();
+      setLastAction("Voice recognition manually restarted");
+    }, 300);
+  };
+
+  // Render a visible button that matches the VoiceAssistant design
+  return (
+    <div className="fixed bottom-6 left-6 z-50">
+      <button
+        className={`flex items-center justify-center rounded-full w-14 h-14 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg transition-all duration-300 ${
+          isListening ? "shadow-xl ring-2 ring-white/30" : "shadow-md"
+        }`}
+        onClick={handleRestartClick}
+        aria-label="Voice Recognition"
+        title="Click to restart voice recognition"
+        style={{
+          transform: "scale(1)",
+          transition: "transform 0.2s ease-in-out",
+        }}
+      >
+        {isListening ? (
+          <div className="relative h-6 w-12 flex items-center justify-center">
+            {[...Array(5)].map((_, index) => (
+              <div
+                key={index}
+                className="bg-white w-1.5 mx-0.5 rounded-full mic-bar"
+                style={{
+                  height: "15px",
+                  animationDelay: `${index * 0.1}s`,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="relative">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" x2="12" y1="19" y2="22"></line>
+            </svg>
+            <div className="absolute inset-0 rounded-full border-2 border-white/50 mic-pulse" />
+          </div>
+        )}
+      </button>
+
+      {/* Add CSS animations for the mic animations */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        @keyframes voicePulse {
+          0%, 100% { height: 5px; }
+          50% { height: 15px; }
+        }
+        .mic-bar {
+          animation: voicePulse 0.8s infinite ease-in-out;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.7; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(1.1); }
+        }
+        .mic-pulse {
+          animation: pulse 2s infinite;
+        }
+      `,
+        }}
+      />
+    </div>
+  );
 };
