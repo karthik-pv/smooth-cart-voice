@@ -9,7 +9,7 @@ import { useProduct } from "@/context/ProductContext";
 import { useUserInfo } from "@/hooks/useUserInfo";
 
 // Initialize Gemini with Vite environment variable
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI("AIzaSyDBscO77bmcHVTcr-1T_aWLO_6z09-RiMI");
 
 // Add this to the availableFunctions object
 // Update UserInfo interface to include credit card details
